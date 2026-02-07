@@ -1,0 +1,4739 @@
+-- ============================================================================
+-- ROBLOX COMPATIBILITY LAYER FOR POLYTORIA - ULTIMATE VERSION
+-- ============================================================================
+-- Complete Roblox-like API suite for Polytoria developers
+-- Maximum flexibility, options, and compatibility
+-- ============================================================================
+
+CompatLayer = {}
+CompatLayer.__index = CompatLayer
+
+-- ============================================================================
+-- GLOBAL VARIABLE SYSTEM
+-- ============================================================================
+
+local GlobalVariables = {}
+local GlobalMetatable = {
+    __index = GlobalVariables,
+    __newindex = function(_, k, v)
+        GlobalVariables[k] = v
+    end
+}
+
+setmetatable(_G, GlobalMetatable)
+
+function CompatLayer:SetGlobal(name, value)
+    GlobalVariables[name] = value
+    _G[name] = value
+end
+
+function CompatLayer:GetGlobal(name)
+    return GlobalVariables[name] or _G[name]
+end
+
+function CompatLayer:DeleteGlobal(name)
+    GlobalVariables[name] = nil
+    _G[name] = nil
+end
+
+function CompatLayer:GetAllGlobals()
+    return GlobalVariables
+end
+
+function CompatLayer:ClearGlobals()
+    for k in pairs(GlobalVariables) do
+        GlobalVariables[k] = nil
+    end
+end
+
+function CompatLayer:GlobalExists(name)
+    return GlobalVariables[name] ~= nil or _G[name] ~= nil
+end
+
+-- ============================================================================
+-- CORE GLOBALS & SERVICES
+-- ============================================================================
+
+-- Service container
+local Services = {}
+
+function CompatLayer:GetService(serviceName)
+    if Services[serviceName] then
+        return Services[serviceName]
+    end
+    
+    local service = nil
+    if serviceName == "Players" then
+        service = CompatLayer:_InitPlayersService()
+    elseif serviceName == "RunService" then
+        service = CompatLayer:_InitRunService()
+    elseif serviceName == "DataStoreService" then
+        service = CompatLayer:_InitDataStoreService()
+    elseif serviceName == "UserInputService" then
+        service = CompatLayer:_InitUserInputService()
+    elseif serviceName == "HttpService" then
+        service = CompatLayer:_InitHttpService()
+    elseif serviceName == "TweenService" then
+        service = CompatLayer:_InitTweenService()
+    elseif serviceName == "ContextActionService" then
+        service = CompatLayer:_InitContextActionService()
+    elseif serviceName == "SoundService" then
+        service = CompatLayer:_InitSoundService()
+    elseif serviceName == "Debris" then
+        service = CompatLayer:_InitDebrisService()
+    elseif serviceName == "MarketplaceService" then
+        service = CompatLayer:_InitMarketplaceService()
+    elseif serviceName == "BadgeService" then
+        service = CompatLayer:_InitBadgeService()
+    elseif serviceName == "GamePassService" then
+        service = CompatLayer:_InitGamePassService()
+    elseif serviceName == "LeaderboardService" then
+        service = CompatLayer:_InitLeaderboardService()
+    elseif serviceName == "ChatService" then
+        service = CompatLayer:_InitChatService()
+    elseif serviceName == "AnalyticsService" then
+        service = CompatLayer:_InitAnalyticsService()
+    elseif serviceName == "GuiService" then
+        service = CompatLayer:_InitGuiService()
+    elseif serviceName == "CoreGui" then
+        service = CompatLayer:_InitCoreGui()
+    elseif serviceName == "StarterPlayer" then
+        service = CompatLayer:_InitStarterPlayer()
+    elseif serviceName == "Workspace" then
+        service = workspace
+    elseif serviceName == "ReplicatedStorage" then
+        service = CompatLayer:_InitReplicatedStorage()
+    elseif serviceName == "ServerScriptService" then
+        service = CompatLayer:_InitServerScriptService()
+    elseif serviceName == "LocalizationService" then
+        service = CompatLayer:_InitLocalizationService()
+    elseif serviceName == "ContentProvider" then
+        service = CompatLayer:_InitContentProvider()
+    elseif serviceName == "ProximityPromptService" then
+        service = CompatLayer:_InitProximityPromptService()
+    elseif serviceName == "SelectionService" then
+        service = CompatLayer:_InitSelectionService()
+    elseif serviceName == "Geometry" then
+        service = CompatLayer:_InitGeometry()
+    elseif serviceName == "FontService" then
+        service = CompatLayer:_InitFontService()
+    else
+        error("Service " .. serviceName .. " not available")
+    end
+    
+    Services[serviceName] = service
+    return service
+end
+
+-- ============================================================================
+-- SIGNAL/EVENT SYSTEM
+-- ============================================================================
+
+-- ============================================================================
+-- FONT COMPATIBILITY & FONT SERVICE
+-- ============================================================================
+CompatLayer.FontRegistry = {
+    defaultMappings = {
+        SourceSans = "Source Sans Pro",
+        SourceSansBold = "Source Sans Pro Bold",
+        Gotham = "Gotham", -- best-effort mappings
+        GothamBold = "Gotham Bold",
+        Arial = "Arial",
+        Roboto = "Roboto",
+        Legacy = "Arial",
+    }
+}
+
+function CompatLayer:RegisterFont(alias, polytoriaNameOrAsset)
+    CompatLayer.FontRegistry[alias] = polytoriaNameOrAsset
+    return true
+end
+
+function CompatLayer:GetFont(alias)
+    if alias == nil then return nil end
+    if CompatLayer.FontRegistry[alias] then return CompatLayer.FontRegistry[alias] end
+    if CompatLayer.FontRegistry.defaultMappings[alias] then return CompatLayer.FontRegistry.defaultMappings[alias] end
+    return alias -- fallback to passed name
+end
+
+function CompatLayer:MapFont(font)
+    -- Accepts Enum-like names, strings, or font objects; returns a Polytoria-friendly identifier
+    if type(font) == "table" and font.Name then
+        font = font.Name
+    end
+    local name = tostring(font)
+    return CompatLayer:GetFont(name)
+end
+
+function CompatLayer:ApplyFont(guiObject, fontAliasOrEnum, size)
+    -- Attempts to set a font on a GUI/Text object in a tolerant way.
+    if not guiObject then return false, "no object" end
+    local fontName = CompatLayer:MapFont(fontAliasOrEnum) or tostring(fontAliasOrEnum)
+    size = size or (guiObject.TextSize or guiObject.FontSize or 14)
+
+    local success = false
+    local setters = {"Font", "TextFont", "FontFace", "TextFontId", "FontFamily"}
+    for _, prop in ipairs(setters) do
+        if pcall(function() return guiObject[prop] end) then
+            pcall(function()
+                guiObject[prop] = fontName
+            end)
+            success = true
+        end
+    end
+
+    if pcall(function() return guiObject.TextSize end) then
+        pcall(function() guiObject.TextSize = size end)
+    end
+
+    return success, fontName
+end
+
+function CompatLayer:_InitFontService()
+    return {
+        RegisterFont = function(_, alias, polytoriaNameOrAsset) return CompatLayer:RegisterFont(alias, polytoriaNameOrAsset) end,
+        GetFont = function(_, alias) return CompatLayer:GetFont(alias) end,
+        MapFont = function(_, font) return CompatLayer:MapFont(font) end,
+        ApplyFont = function(_, guiObject, fontAliasOrEnum, size) return CompatLayer:ApplyFont(guiObject, fontAliasOrEnum, size) end,
+        Registry = CompatLayer.FontRegistry,
+    }
+end
+
+local Signal = {}
+Signal.__index = Signal
+
+function Signal.new()
+    local self = setmetatable({}, Signal)
+    self._bindable = Instance.new("BindableEvent") or {}
+    self._connections = {}
+    self._fired = false
+    self._fireArgs = {}
+    return self
+end
+
+function Signal:Connect(callback)
+    if not callback or type(callback) ~= "function" then
+        error("Signal:Connect expects a function")
+    end
+    
+    local connection = {}
+    connection.Connected = true
+    connection._callback = callback
+    connection._signal = self
+    
+    function connection:Disconnect()
+        self.Connected = false
+        if self._signal then
+            for i, conn in pairs(self._signal._connections) do
+                if conn == self then
+                    table.remove(self._signal._connections, i)
+                    break
+                end
+            end
+        end
+    end
+    
+    if self._bindable and self._bindable.Event then
+        local realConn = self._bindable.Event:Connect(callback)
+        connection._realConnection = realConn
+        return connection
+    else
+        table.insert(self._connections, connection)
+        return connection
+    end
+end
+
+function Signal:Fire(...)
+    self._fired = true
+    self._fireArgs = {...}
+    
+    if self._bindable and self._bindable:Fire then
+        pcall(function() self._bindable:Fire(...) end)
+    else
+        for _, conn in pairs(self._connections) do
+            if conn.Connected then
+                pcall(conn._callback, ...)
+            end
+        end
+    end
+end
+
+function Signal:Wait()
+    if self._bindable and self._bindable.Event then
+        return self._bindable.Event:Wait()
+    else
+        while not self._fired do
+            wait(0.001)
+        end
+        local args = self._fireArgs
+        self._fired = false
+        self._fireArgs = {}
+        return table.unpack(args)
+    end
+end
+
+function Signal:ConnectParallel(callback)
+    if not callback or type(callback) ~= "function" then
+        error("Signal:ConnectParallel expects a function")
+    end
+    
+    local connection = {}
+    connection.Connected = true
+    connection._callback = callback
+    connection._signal = self
+    
+    function connection:Disconnect()
+        self.Connected = false
+    end
+    
+    table.insert(self._connections, connection)
+    return connection
+end
+
+function Signal:DisconnectAll()
+    for _, conn in pairs(self._connections) do
+        conn:Disconnect()
+    end
+    self._connections = {}
+end
+
+function Signal:GetConnectionCount()
+    return #self._connections
+end
+
+-- Connection object for better management
+local Connection = {}
+Connection.__index = Connection
+
+function Connection.new(signal, callback)
+    local self = setmetatable({}, Connection)
+    self.Connected = true
+    self._signal = signal
+    self._callback = callback
+    return self
+end
+
+function Connection:Disconnect()
+    self.Connected = false
+end
+
+-- ============================================================================
+-- REMOTE COMMUNICATION
+-- ============================================================================
+
+function CompatLayer:CreateRemoteEvent(name, parent)
+    local remote = Instance.new("RemoteEvent")
+    remote.Name = name
+    if parent then
+        remote.Parent = parent
+    end
+    return remote
+end
+
+function CompatLayer:CreateRemoteFunction(name, parent)
+    local remote = Instance.new("RemoteFunction")
+    remote.Name = name
+    if parent then
+        remote.Parent = parent
+    end
+    return remote
+end
+
+function CompatLayer:CreateBindableEvent(name)
+    local event = Instance.new("BindableEvent")
+    event.Name = name
+    return event
+end
+
+function CompatLayer:CreateBindableFunction(name)
+    local func = Instance.new("BindableFunction")
+    func.Name = name
+    return func
+end
+
+-- ============================================================================
+-- DATATYPE CONSTRUCTORS & UTILITIES
+-- ============================================================================
+
+-- Vector2
+function CompatLayer:Vector2(x, y)
+    local v = {x = x or 0, y = y or 0, Type = "Vector2"}
+    
+    function v:Magnitude()
+        return math.sqrt(self.x * self.x + self.y * self.y)
+    end
+    
+    function v:Unit()
+        local mag = self:Magnitude()
+        if mag == 0 then return CompatLayer:Vector2(0, 0) end
+        return CompatLayer:Vector2(self.x / mag, self.y / mag)
+    end
+    
+    function v:Dot(other)
+        return self.x * other.x + self.y * other.y
+    end
+    
+    function v:Cross(other)
+        return self.x * other.y - self.y * other.x
+    end
+    
+    function v:Lerp(other, t)
+        return CompatLayer:Vector2(
+            self.x + (other.x - self.x) * t,
+            self.y + (other.y - self.y) * t
+        )
+    end
+    
+    return v
+end
+
+-- Vector3
+function CompatLayer:Vector3(x, y, z)
+    local v = Vector3.new(x or 0, y or 0, z or 0)
+    
+    function v:Dot(other)
+        return self.x * other.x + self.y * other.y + self.z * other.z
+    end
+    
+    function v:Cross(other)
+        return Vector3.new(
+            self.y * other.z - self.z * other.y,
+            self.z * other.x - self.x * other.z,
+            self.x * other.y - self.y * other.x
+        )
+    end
+    
+    function v:Unit()
+        local mag = self.Magnitude
+        if mag == 0 then return Vector3.new(0, 0, 0) end
+        return self / mag
+    end
+    
+    function v:Lerp(other, t)
+        return self + (other - self) * t
+    end
+    
+    function v:Angle(other)
+        local dot = self:Dot(other)
+        local mag1 = self.Magnitude
+        local mag2 = other.Magnitude
+        if mag1 == 0 or mag2 == 0 then return 0 end
+        return math.acos(dot / (mag1 * mag2))
+    end
+    
+    return v
+end
+
+-- CFrame
+function CompatLayer:CFrame(x, y, z)
+    return CFrame.new(x or 0, y or 0, z or 0)
+end
+
+function CompatLayer:CFrameFromAxisAngle(axis, angle)
+    return CFrame.fromAxisAngle(axis, angle)
+end
+
+function CompatLayer:CFrameLookAt(eye, target, up)
+    return CFrame.lookAt(eye, target, up or Vector3.new(0, 1, 0))
+end
+
+function CompatLayer:CFrameAngles(rx, ry, rz)
+    return CFrame.Angles(rx, ry, rz)
+end
+
+function CompatLayer:CFrameFromMatrix(x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22)
+    return CFrame.new(x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22)
+end
+
+-- Color3
+function CompatLayer:Color3(r, g, b)
+    if type(r) == "number" then
+        return {r = r, g = g or 0, b = b or 0, Type = "Color3"}
+    else
+        return {r = 1, g = 1, b = 1, Type = "Color3"}
+    end
+end
+
+function CompatLayer:Color3FromRGB(r, g, b)
+    return {r = r/255, g = g/255, b = b/255, Type = "Color3"}
+end
+
+function CompatLayer:Color3FromHSV(h, s, v)
+    local c = v * s
+    local x = c * (1 - ((h / 60) % 2 - 1))
+    local m = v - c
+    local r, g, b = 0, 0, 0
+    
+    if h < 60 then r, g, b = c, x, 0
+    elseif h < 120 then r, g, b = x, c, 0
+    elseif h < 180 then r, g, b = 0, c, x
+    elseif h < 240 then r, g, b = 0, x, c
+    elseif h < 300 then r, g, b = x, 0, c
+    else r, g, b = c, 0, x
+    end
+    
+    return CompatLayer:Color3(r + m, g + m, b + m)
+end
+
+function CompatLayer:Color3FromName(name)
+    local colorMap = {
+        red = {r = 1, g = 0, b = 0},
+        green = {r = 0, g = 1, b = 0},
+        blue = {r = 0, g = 0, b = 1},
+        white = {r = 1, g = 1, b = 1},
+        black = {r = 0, g = 0, b = 0},
+        yellow = {r = 1, g = 1, b = 0},
+        cyan = {r = 0, g = 1, b = 1},
+        magenta = {r = 1, g = 0, b = 1},
+    }
+    return colorMap[name:lower()] or {r = 1, g = 1, b = 1}
+end
+
+-- UDim2
+function CompatLayer:UDim2(xScale, xOffset, yScale, yOffset)
+    return {
+        X = {Scale = xScale or 0, Offset = xOffset or 0},
+        Y = {Scale = yScale or 0, Offset = yOffset or 0},
+        Type = "UDim2"
+    }
+end
+
+-- Rect
+function CompatLayer:Rect(x, y, width, height)
+    return {x = x, y = y, width = width, height = height, Type = "Rect"}
+end
+
+-- BrickColor (extended)
+function CompatLayer:BrickColor(name)
+    return {Name = name, Type = "BrickColor", Value = 0}
+end
+
+function CompatLayer:BrickColorFromNumber(num)
+    return {Name = "CustomColor", Type = "BrickColor", Value = num}
+end
+
+-- NumberRange
+function CompatLayer:NumberRange(min, max)
+    return {Min = min, Max = max or min, Type = "NumberRange"}
+end
+
+-- NumberSequence
+function CompatLayer:NumberSequence(...)
+    local keypoints = {...}
+    return {Keypoints = keypoints, Type = "NumberSequence"}
+end
+
+-- ColorSequence
+function CompatLayer:ColorSequence(...)
+    local keypoints = {...}
+    return {Keypoints = keypoints, Type = "ColorSequence"}
+end
+
+-- Region3
+function CompatLayer:Region3(min, max)
+    return {Min = min, Max = max, Type = "Region3"}
+end
+
+-- Region3int16
+function CompatLayer:Region3int16(min, max)
+    return {Min = min, Max = max, Type = "Region3int16"}
+end
+
+-- Faces
+function CompatLayer:Faces(...)
+    return {Faces = {...}, Type = "Faces"}
+end
+
+-- Axes
+function CompatLayer:Axes(...)
+    return {Axes = {...}, Type = "Axes"}
+end
+
+-- Enum support
+CompatLayer.Enum = {
+    PartType = {
+        Ball = "Ball",
+        Block = "Block",
+        Cylinder = "Cylinder"
+    },
+    Material = {
+        Plastic = "Plastic",
+        Wood = "Wood",
+        Slate = "Slate",
+        Concrete = "Concrete",
+        CorrodedMetal = "CorrodedMetal",
+        DiamondPlate = "DiamondPlate",
+        Foil = "Foil",
+        Brick = "Brick",
+        Cobblestone = "Cobblestone",
+        Marble = "Marble",
+        Granite = "Granite",
+        Pebble = "Pebble",
+    },
+    HumanoidStateType = {
+        Idle = 0,
+        Running = 1,
+        RunningNoPhysics = 2,
+        Swimming = 3,
+        Jumping = 4,
+        Climbing = 5,
+        Flying = 6,
+        Falling = 7,
+        Landed = 8,
+        Trending = 9,
+        Dead = 10,
+    },
+    UserInputType = {
+        MouseButton1 = 1,
+        MouseButton2 = 2,
+        MouseButton3 = 3,
+        MouseWheel = 4,
+        MouseMovement = 5,
+        Keyboard = 6,
+        Touch = 7,
+        Gamepad1 = 8,
+        Gamepad2 = 9,
+        Gamepad3 = 10,
+        Gamepad4 = 11,
+    },
+    KeyCode = {
+        A = "A", B = "B", C = "C", D = "D", E = "E", F = "F", G = "G", H = "H",
+        I = "I", J = "J", K = "K", L = "L", M = "M", N = "N", O = "O", P = "P",
+        Q = "Q", R = "R", S = "S", T = "T", U = "U", V = "V", W = "W", X = "X",
+        Y = "Y", Z = "Z",
+        Space = "Space", Return = "Return", BackSpace = "BackSpace", Tab = "Tab",
+        Escape = "Escape", Shift = "Shift", Control = "Control", Alt = "Alt",
+    },
+    TextDirection = {
+        LeftToRight = 0,
+        RightToLeft = 1,
+    },
+    TextXAlignment = {
+        Left = 0,
+        Center = 1,
+        Right = 2,
+    },
+    TextYAlignment = {
+        Top = 0,
+        Center = 1,
+        Bottom = 2,
+    },
+}
+
+-- ============================================================================
+-- INSTANCE MANIPULATION
+-- ============================================================================
+
+function CompatLayer:IsA(instance, className)
+    if not instance then return false end
+    if instance.ClassName and instance.ClassName == className then
+        return true
+    end
+    if instance.Class and instance.Class == className then
+        return true
+    end
+    local mt = getmetatable(instance)
+    if mt and mt.__type == className then
+        return true
+    end
+    return false
+end
+
+function CompatLayer:FindFirstChild(parent, name, recursive)
+    if not parent then return nil end
+    if parent:FindFirstChild then
+        return parent:FindFirstChild(name)
+    end
+    if parent.Children then
+        for _, child in pairs(parent.Children) do
+            if child.Name == name then
+                return child
+            end
+            if recursive then
+                local found = CompatLayer:FindFirstChild(child, name, true)
+                if found then
+                    return found
+                end
+            end
+        end
+    end
+    return nil
+end
+
+function CompatLayer:FindFirstChildOfClass(parent, className)
+    if not parent then return nil end
+    if parent:FindFirstChildOfClass then
+        return parent:FindFirstChildOfClass(className)
+    end
+    if parent.Children then
+        for _, child in pairs(parent.Children) do
+            if CompatLayer:IsA(child, className) then
+                return child
+            end
+        end
+    end
+    return nil
+end
+
+function CompatLayer:FindFirstChildWhichIsA(parent, className, recursive)
+    if not parent then return nil end
+    if parent.Children then
+        for _, child in pairs(parent.Children) do
+            if CompatLayer:IsA(child, className) then
+                return child
+            end
+            if recursive then
+                local found = CompatLayer:FindFirstChildWhichIsA(child, className, true)
+                if found then
+                    return found
+                end
+            end
+        end
+    end
+    return nil
+end
+
+function CompatLayer:FindFirstAncestor(instance, name)
+    local current = instance.Parent
+    while current do
+        if current.Name == name then
+            return current
+        end
+        current = current.Parent
+    end
+    return nil
+end
+
+function CompatLayer:FindFirstAncestorOfClass(instance, className)
+    local current = instance.Parent
+    while current do
+        if CompatLayer:IsA(current, className) then
+            return current
+        end
+        current = current.Parent
+    end
+    return nil
+end
+
+function CompatLayer:GetChildren(instance)
+    if instance.GetChildren then
+        return instance:GetChildren()
+    elseif instance.Children then
+        return instance.Children
+    end
+    return {}
+end
+
+function CompatLayer:GetDescendants(instance)
+    local descendants = {}
+    local function traverse(obj)
+        local children = CompatLayer:GetChildren(obj)
+        for _, child in pairs(children) do
+            table.insert(descendants, child)
+            traverse(child)
+        end
+    end
+    traverse(instance)
+    return descendants
+end
+
+function CompatLayer:Clone(instance)
+    if instance.Clone then
+        return instance:Clone()
+    end
+    local clone = {}
+    for k, v in pairs(instance) do
+        if type(v) ~= "userdata" and type(v) ~= "function" then
+            clone[k] = v
+        end
+    end
+    return clone
+end
+
+function CompatLayer:SetParent(instance, parent)
+    instance.Parent = parent
+end
+
+function CompatLayer:Destroy(instance)
+    if instance.Destroy then
+        instance:Destroy()
+    elseif instance.Parent then
+        instance.Parent = nil
+    end
+end
+
+function CompatLayer:IsDescendantOf(instance, ancestor)
+    local current = instance.Parent
+    while current do
+        if current == ancestor then
+            return true
+        end
+        current = current.Parent
+    end
+    return false
+end
+
+function CompatLayer:IsAncestorOf(instance, descendant)
+    return CompatLayer:IsDescendantOf(descendant, instance)
+end
+
+function CompatLayer:GetFullName(instance)
+    if not instance then return "" end
+    if instance.Parent then
+        return CompatLayer:GetFullName(instance.Parent) .. "/" .. instance.Name
+    else
+        return instance.Name
+    end
+end
+
+function CompatLayer:CreateInstance(className, properties)
+    local instance = Instance.new(className)
+    if properties then
+        for k, v in pairs(properties) do
+            pcall(function()
+                instance[k] = v
+            end)
+        end
+    end
+    return instance
+end
+
+function CompatLayer:FindFirstChildOfName(parent, name)
+    return CompatLayer:FindFirstChild(parent, name, false)
+end
+
+function CompatLayer:WaitForChild(parent, name, timeout)
+    timeout = timeout or math.huge
+    local startTime = tick()
+    while true do
+        local child = CompatLayer:FindFirstChild(parent, name)
+        if child then
+            return child
+        end
+        if tick() - startTime > timeout then
+            error("WaitForChild timeout for " .. name)
+        end
+        wait(0.05)
+    end
+end
+
+function CompatLayer:SetProperties(instance, properties)
+    if not instance or not properties then return end
+    for k, v in pairs(properties) do
+        pcall(function()
+            instance[k] = v
+        end)
+    end
+end
+
+function CompatLayer:GetProperty(instance, property)
+    if instance then
+        return instance[property]
+    end
+    return nil
+end
+
+function CompatLayer:SetProperty(instance, property, value)
+    if instance then
+        pcall(function()
+            instance[property] = value
+        end)
+    end
+end
+
+-- ============================================================================
+-- HUMANOID & CHARACTER SYSTEMS
+-- ============================================================================
+
+function CompatLayer:GetHumanoidFromPart(part)
+    if not part or not part.Parent then return nil end
+    local humanoid = CompatLayer:FindFirstChildOfClass(part.Parent, "Humanoid")
+    return humanoid
+end
+
+function CompatLayer:GetCharacterFromHumanoid(humanoid)
+    if humanoid and humanoid.Parent then
+        return humanoid.Parent
+    end
+    return nil
+end
+
+function CompatLayer:GetHumanoidRootPart(character)
+    if not character then return nil end
+    return CompatLayer:FindFirstChild(character, "HumanoidRootPart")
+end
+
+function CompatLayer:GetHumanoid(character)
+    if not character then return nil end
+    return CompatLayer:FindFirstChildOfClass(character, "Humanoid")
+end
+
+function CompatLayer:RespawnCharacter(player)
+    if not player or not player.Character then return end
+    if player.Character then
+        player.Character:Destroy()
+    end
+    wait(0.1)
+    if player.Parent and player.Parent:FindFirstChild("SpawnLocation") then
+        local spawn = player.Parent:FindFirstChild("SpawnLocation")
+        local newChar = CompatLayer:Clone(script.Parent:FindFirstChild("StarterCharacter") or player.Character)
+        if newChar then
+            newChar.Parent = workspace
+            newChar:MoveTo(spawn.Position)
+            player.Character = newChar
+        end
+    end
+end
+
+function CompatLayer:CreateHumanoid(character)
+    local humanoid = Instance.new("Humanoid")
+    humanoid.Parent = character
+    humanoid.MaxHealth = 100
+    humanoid.Health = 100
+    return humanoid
+end
+
+function CompatLayer:LoadAnimation(humanoid, animationId)
+    if not humanoid then return nil end
+    local anim = Instance.new("Animation")
+    if type(animationId) == "string" then
+        anim.AnimationId = "rbxassetid://" .. animationId
+    else
+        anim.AnimationId = animationId
+    end
+    local track = humanoid:LoadAnimation(anim)
+    return track
+end
+
+function CompatLayer:PlayAnimation(humanoid, animationId, speed)
+    local track = CompatLayer:LoadAnimation(humanoid, animationId)
+    if track then
+        track:AdjustSpeed(speed or 1)
+        track:Play()
+        return track
+    end
+    return nil
+end
+
+function CompatLayer:StopAnimation(track)
+    if track and track.IsPlaying then
+        track:Stop()
+    end
+end
+
+function CompatLayer:SetHumanoidHealth(humanoid, health)
+    if humanoid then
+        humanoid.Health = health
+    end
+end
+
+function CompatLayer:KillHumanoid(humanoid)
+    if humanoid then
+        humanoid.Health = 0
+    end
+end
+
+-- ============================================================================
+-- PLAYERS SERVICE
+-- ============================================================================
+
+function CompatLayer:_InitPlayersService()
+    local PlayersService = {}
+    
+    function PlayersService:GetPlayers()
+        if game:GetService("Players") then
+            return game:GetService("Players"):GetPlayers()
+        end
+        return {}
+    end
+    
+    function PlayersService:GetPlayerByUserId(userId)
+        for _, player in pairs(self:GetPlayers()) do
+            if player.UserId == userId then
+                return player
+            end
+        end
+        return nil
+    end
+    
+    function PlayersService:GetPlayerFromCharacter(character)
+        for _, player in pairs(self:GetPlayers()) do
+            if player.Character == character then
+                return player
+            end
+        end
+        return nil
+    end
+    
+    function PlayersService:PlayerAdded(callback)
+        local service = game:GetService("Players")
+        if service.PlayerAdded then
+            return service.PlayerAdded:Connect(callback)
+        end
+    end
+    
+    function PlayersService:PlayerRemoving(callback)
+        local service = game:GetService("Players")
+        if service.PlayerRemoving then
+            return service.PlayerRemoving:Connect(callback)
+        end
+    end
+    
+    return PlayersService
+end
+
+-- ============================================================================
+-- RUNSERVICE
+-- ============================================================================
+
+function CompatLayer:_InitRunService()
+    local RunService = {}
+    
+    function RunService:IsServer()
+        return script:FindFirstAncestorOfClass("ServerScriptService") ~= nil or true
+    end
+    
+    function RunService:IsClient()
+        return not self:IsServer()
+    end
+    
+    function RunService:IsStudio()
+        local service = game:FindService("RunService")
+        return service and service:IsStudio() or false
+    end
+    
+    function RunService:BindToRenderStep(name, priority, callback)
+        if game:GetService("RunService").BindToRenderStep then
+            return game:GetService("RunService"):BindToRenderStep(name, priority, callback)
+        else
+            while true do
+                callback(game:GetService("RunService").RenderStepped:Wait())
+            end
+        end
+    end
+    
+    function RunService:UnbindFromRenderStep(name)
+        if game:GetService("RunService").UnbindFromRenderStep then
+            game:GetService("RunService"):UnbindFromRenderStep(name)
+        end
+    end
+    
+    function RunService:Heartbeat(callback)
+        local service = game:GetService("RunService")
+        if service.Heartbeat then
+            return service.Heartbeat:Connect(callback)
+        end
+    end
+    
+    function RunService:RenderStepped(callback)
+        local service = game:GetService("RunService")
+        if service.RenderStepped then
+            return service.RenderStepped:Connect(callback)
+        end
+    end
+    
+    return RunService
+end
+
+-- ============================================================================
+-- DATASTORE SERVICE
+-- ============================================================================
+
+function CompatLayer:_InitDataStoreService()
+    local DataStoreService = {}
+    local datastores = {}
+    
+    function DataStoreService:GetDataStore(name, scope)
+        local key = name .. ":" .. (scope or "default")
+        if not datastores[key] then
+            datastores[key] = {
+                data = {},
+                name = name,
+                scope = scope or "default"
+            }
+        end
+        return datastores[key]
+    end
+    
+    function DataStoreService:GetOrderedDataStore(name, scope)
+        return self:GetDataStore(name, scope)
+    end
+    
+    function DataStoreService:ListDataStoresAsync(prefix, pageSize)
+        local list = {}
+        for key, _ in pairs(datastores) do
+            if not prefix or string.sub(key, 1, #prefix) == prefix then
+                table.insert(list, key)
+            end
+        end
+        return list
+    end
+    
+    return DataStoreService
+end
+
+-- ============================================================================
+-- USERINPUT SERVICE
+-- ============================================================================
+
+function CompatLayer:_InitUserInputService()
+    local UserInputService = {}
+    UserInputService._keyDown = {}
+    UserInputService._keyUp = {}
+    UserInputService._inputBegan = Signal.new()
+    UserInputService._inputEnded = Signal.new()
+    
+    function UserInputService:IsKeyDown(keyCode)
+        return self._keyDown[keyCode] or false
+    end
+    
+    function UserInputService:IsMouseButtonDown(mouseButton)
+        return self._mouseDown or false
+    end
+    
+    function UserInputService:GetMouseLocation()
+        return {x = 0, y = 0}
+    end
+    
+    function UserInputService:InputBegan(callback)
+        return self._inputBegan:Connect(callback)
+    end
+    
+    function UserInputService:InputEnded(callback)
+        return self._inputEnded:Connect(callback)
+    end
+    
+    function UserInputService:GetFocusedTextBox()
+        return nil
+    end
+    
+    return UserInputService
+end
+
+-- ============================================================================
+-- HTTP SERVICE
+-- ============================================================================
+
+function CompatLayer:_InitHttpService()
+    local HttpService = {}
+    
+    function HttpService:GetAsync(url, nocache)
+        -- Polytoria equivalent: use native HTTP or return mock data
+        return "{}"
+    end
+    
+    function HttpService:PostAsync(url, data, contentType, compress)
+        return "{}"
+    end
+    
+    function HttpService:JSONEncode(obj)
+        return game:GetService("HttpService"):JSONEncode(obj) or "{}"
+    end
+    
+    function HttpService:JSONDecode(json)
+        return game:GetService("HttpService"):JSONDecode(json) or {}
+    end
+    
+    function HttpService:UrlEncode(str)
+        return string.gsub(str, " ", "%%20")
+    end
+    
+    return HttpService
+end
+
+-- ============================================================================
+-- TWEEN SERVICE
+-- ============================================================================
+
+function CompatLayer:_InitTweenService()
+    local TweenService = {}
+    local activeTweens = {}
+    
+    function TweenService:Create(instance, tweenInfo, goalProperties)
+        local tween = {
+            Instance = instance,
+            TweenInfo = tweenInfo,
+            Goal = goalProperties,
+            PlaybackState = "Idle",
+            _startTime = 0,
+            _startValues = {}
+        }
+        
+        function tween:Play()
+            self.PlaybackState = "Playing"
+            self._startTime = tick()
+            for prop, val in pairs(self.Goal) do
+                self._startValues[prop] = self.Instance[prop]
+            end
+        end
+        
+        function tween:Pause()
+            self.PlaybackState = "Paused"
+        end
+        
+        function tween:Resume()
+            self.PlaybackState = "Playing"
+        end
+        
+        function tween:Cancel()
+            self.PlaybackState = "Cancelled"
+        end
+        
+        function tween:Destroy()
+            self.PlaybackState = "Completed"
+        end
+        
+        return tween
+    end
+    
+    return TweenService
+end
+
+-- ============================================================================
+-- CONTEXT ACTION SERVICE
+-- ============================================================================
+
+function CompatLayer:_InitContextActionService()
+    local ContextActionService = {}
+    ContextActionService._actions = {}
+    
+    function ContextActionService:BindAction(actionName, callback, touchButton, ...)
+        self._actions[actionName] = {
+            callback = callback,
+            inputs = {...}
+        }
+    end
+    
+    function ContextActionService:UnbindAction(actionName)
+        self._actions[actionName] = nil
+    end
+    
+    function ContextActionService:SetDescription(actionName, description)
+        if self._actions[actionName] then
+            self._actions[actionName].description = description
+        end
+    end
+    
+    function ContextActionService:GetBoundActionInfo(actionName)
+        return self._actions[actionName]
+    end
+    
+    return ContextActionService
+end
+
+-- ============================================================================
+-- SOUND SERVICE
+-- ============================================================================
+
+function CompatLayer:_InitSoundService()
+    local SoundService = {}
+    
+    function SoundService:PlayLocalSound(sound)
+        if sound.Play then
+            sound:Play()
+        end
+    end
+    
+    function SoundService:StopLocalSound(sound)
+        if sound.Stop then
+            sound:Stop()
+        end
+    end
+    
+    function SoundService:GetListener()
+        return "Head"
+    end
+    
+    function SoundService:SetListener(listener)
+        -- Set audio listener
+    end
+    
+    return SoundService
+end
+
+-- ============================================================================
+-- MARKETPLACE SERVICE
+-- ============================================================================
+
+function CompatLayer:_InitMarketplaceService()
+    local MarketplaceService = {}
+    local purchases = {}
+    
+    function MarketplaceService:PromptProductPurchase(player, productId)
+        table.insert(purchases, {player = player, productId = productId, time = tick()})
+        return true
+    end
+    
+    function MarketplaceService:PromptGamePassPurchase(player, gamePassId)
+        table.insert(purchases, {player = player, gamePassId = gamePassId, time = tick()})
+        return true
+    end
+    
+    function MarketplaceService:PlayerOwnsAsset(player, assetId)
+        return false -- Placeholder
+    end
+    
+    function MarketplaceService:PlayerOwnsGamePass(player, gamePassId)
+        return false -- Placeholder
+    end
+    
+    function MarketplaceService:GetPurchaseHistory()
+        return purchases
+    end
+    
+    function MarketplaceService:ProcessPurchase(productId, playerId, requestId)
+        return "Completed"
+    end
+    
+    return MarketplaceService
+end
+
+-- ============================================================================
+-- BADGE SERVICE
+-- ============================================================================
+
+function CompatLayer:_InitBadgeService()
+    local BadgeService = {}
+    local badgeData = {}
+    
+    function BadgeService:AwardBadge(player, badgeId)
+        local playerId = player.UserId or player
+        if not badgeData[playerId] then
+            badgeData[playerId] = {}
+        end
+        badgeData[playerId][badgeId] = true
+    end
+    
+    function BadgeService:UserHasBadge(userId, badgeId)
+        return badgeData[userId] and badgeData[userId][badgeId] or false
+    end
+    
+    function BadgeService:GetBadges(userId)
+        return badgeData[userId] or {}
+    end
+    
+    return BadgeService
+end
+
+-- ============================================================================
+-- GAMEPASS SERVICE
+-- ============================================================================
+
+function CompatLayer:_InitGamePassService()
+    local GamePassService = {}
+    local gamePasses = {}
+    
+    function GamePassService:PlayerOwnsGamePass(userId, gamePassId)
+        return gamePasses[userId] and gamePasses[userId][gamePassId] or false
+    end
+    
+    function GamePassService:AwardGamePass(userId, gamePassId)
+        if not gamePasses[userId] then
+            gamePasses[userId] = {}
+        end
+        gamePasses[userId][gamePassId] = true
+    end
+    
+    function GamePassService:GetUserGamePasses(userId)
+        return gamePasses[userId] or {}
+    end
+    
+    return GamePassService
+end
+
+-- ============================================================================
+-- LEADERBOARD SERVICE
+-- ============================================================================
+
+function CompatLayer:_InitLeaderboardService()
+    local LeaderboardService = {}
+    local leaderboards = {}
+    
+    function LeaderboardService:CreateLeaderboard(name)
+        leaderboards[name] = {}
+        return leaderboards[name]
+    end
+    
+    function LeaderboardService:GetLeaderboard(name)
+        return leaderboards[name]
+    end
+    
+    function LeaderboardService:SetPlayerStat(leaderboardName, playerId, value)
+        if not leaderboards[leaderboardName] then
+            leaderboards[leaderboardName] = {}
+        end
+        leaderboards[leaderboardName][playerId] = value
+    end
+    
+    function LeaderboardService:GetPlayerStat(leaderboardName, playerId)
+        if leaderboards[leaderboardName] then
+            return leaderboards[leaderboardName][playerId]
+        end
+        return nil
+    end
+    
+    function LeaderboardService:GetLeaderboardRanking(leaderboardName, limit)
+        if not leaderboards[leaderboardName] then return {} end
+        
+        local sorted = {}
+        for playerId, value in pairs(leaderboards[leaderboardName]) do
+            table.insert(sorted, {playerId = playerId, value = value})
+        end
+        
+        table.sort(sorted, function(a, b) return a.value > b.value end)
+        
+        if limit then
+            local result = {}
+            for i = 1, math.min(limit, #sorted) do
+                table.insert(result, sorted[i])
+            end
+            return result
+        end
+        
+        return sorted
+    end
+    
+    return LeaderboardService
+end
+
+-- ============================================================================
+-- CHAT SERVICE
+-- ============================================================================
+
+function CompatLayer:_InitChatService()
+    local ChatService = {}
+    ChatService._messages = {}
+    ChatService._chatSignal = Signal.new()
+    
+    function ChatService:SendMessage(player, message)
+        table.insert(self._messages, {
+            player = player,
+            message = message,
+            time = tick()
+        })
+        self._chatSignal:Fire(player, message)
+    end
+    
+    function ChatService:GetMessages(limit)
+        limit = limit or 100
+        local result = {}
+        local startIdx = math.max(1, #self._messages - limit + 1)
+        for i = startIdx, #self._messages do
+            table.insert(result, self._messages[i])
+        end
+        return result
+    end
+    
+    function ChatService:MessageReceived(callback)
+        return self._chatSignal:Connect(callback)
+    end
+    
+    function ChatService:ClearMessages()
+        self._messages = {}
+    end
+    
+    return ChatService
+end
+
+-- ============================================================================
+-- ANALYTICS SERVICE
+-- ============================================================================
+
+function CompatLayer:_InitAnalyticsService()
+    local AnalyticsService = {}
+    AnalyticsService._events = {}
+    
+    function AnalyticsService:FireEvent(eventName, properties)
+        table.insert(self._events, {
+            name = eventName,
+            properties = properties or {},
+            time = tick()
+        })
+    end
+    
+    function AnalyticsService:ReportStats(stats)
+        for name, value in pairs(stats) do
+            AnalyticsService:FireEvent(name, {value = value})
+        end
+    end
+    
+    function AnalyticsService:GetEvents(limit)
+        limit = limit or math.huge
+        local result = {}
+        for i = math.max(1, #self._events - limit + 1), #self._events do
+            table.insert(result, self._events[i])
+        end
+        return result
+    end
+    
+    return AnalyticsService
+end
+
+-- ============================================================================
+-- GUI SERVICE
+-- ============================================================================
+
+function CompatLayer:_InitGuiService()
+    local GuiService = {}
+    
+    function GuiService:GetGui(guiType)
+        return Instance.new("ScreenGui")
+    end
+    
+    function GuiService:AddSelectionTouchMarker(guiObject, touchInputObject, position)
+        -- Visual feedback for touch selection
+    end
+    
+    function GuiService:RemoveSelectionTouchMarker(guiObject)
+        -- Remove touch selection visual
+    end
+    
+    function GuiService:IsTouchGuiOpen()
+        return false
+    end
+    
+    function GuiService:GetGuiInset()
+        return Vector2.new(0, 0), Vector2.new(0, 0)
+    end
+    
+    function GuiService:GetScreenSize()
+        return Vector2.new(1920, 1080)
+    end
+    
+    return GuiService
+end
+
+-- ============================================================================
+-- CORE GUI
+-- ============================================================================
+
+function CompatLayer:_InitCoreGui()
+    return Instance.new("ScreenGui")
+end
+
+-- ============================================================================
+-- STARTER PLAYER
+-- ============================================================================
+
+function CompatLayer:_InitStarterPlayer()
+    local StarterPlayer = {}
+    
+    function StarterPlayer:GetCharacterTemplate()
+        return Instance.new("Model")
+    end
+    
+    return StarterPlayer
+end
+
+-- ============================================================================
+-- REPLICATED STORAGE
+-- ============================================================================
+
+function CompatLayer:_InitReplicatedStorage()
+    return Instance.new("Folder")
+end
+
+-- ============================================================================
+-- SERVER SCRIPT SERVICE
+-- ============================================================================
+
+function CompatLayer:_InitServerScriptService()
+    return Instance.new("Folder")
+end
+
+-- ============================================================================
+-- LOCALIZATION SERVICE
+-- ============================================================================
+
+function CompatLayer:_InitLocalizationService()
+    local LocalizationService = {}
+    LocalizationService._translations = {}
+    
+    function LocalizationService:AddTranslation(key, language, text)
+        if not self._translations[language] then
+            self._translations[language] = {}
+        end
+        self._translations[language][key] = text
+    end
+    
+    function LocalizationService:GetTranslation(key, language)
+        if self._translations[language] then
+            return self._translations[language][key] or key
+        end
+        return key
+    end
+    
+    function LocalizationService:SetLocale(locale)
+        self.CurrentLocale = locale
+    end
+    
+    return LocalizationService
+end
+
+-- ============================================================================
+-- CONTENT PROVIDER
+-- ============================================================================
+
+function CompatLayer:_InitContentProvider()
+    local ContentProvider = {}
+    
+    function ContentProvider:IsLoaded(contentId)
+        return true
+    end
+    
+    function ContentProvider:Preload(contentId)
+        -- Preload content
+    end
+    
+    function ContentProvider:Preload_Async(contentList)
+        -- Async preload
+    end
+    
+    function ContentProvider:GetAsyncLoadedSize()
+        return 0
+    end
+    
+    function ContentProvider:GetSize(contentId)
+        return 0
+    end
+    
+    return ContentProvider
+end
+
+-- ============================================================================
+-- PROXIMITY PROMPT SERVICE
+-- ============================================================================
+
+function CompatLayer:_InitProximityPromptService()
+    local ProximityPromptService = {}
+    
+    function ProximityPromptService:CreatePrompt(name, properties)
+        local prompt = Instance.new("Part")
+        prompt.Name = name
+        for k, v in pairs(properties or {}) do
+            pcall(function() prompt[k] = v end)
+        end
+        return prompt
+    end
+    
+    function ProximityPromptService:TriggerPrompt(prompt, player)
+        -- Trigger proximity prompt
+    end
+    
+    return ProximityPromptService
+end
+
+-- ============================================================================
+-- SELECTION SERVICE
+-- ============================================================================
+
+function CompatLayer:_InitSelectionService()
+    local SelectionService = {}
+    SelectionService._selectedObjects = {}
+    
+    function SelectionService:Select(objects)
+        self._selectedObjects = objects or {}
+    end
+    
+    function SelectionService:GetSelection()
+        return self._selectedObjects
+    end
+    
+    function SelectionService:Deselect()
+        self._selectedObjects = {}
+    end
+    
+    return SelectionService
+end
+
+-- ============================================================================
+-- GEOMETRY
+-- ============================================================================
+
+function CompatLayer:_InitGeometry()
+    local Geometry = {}
+    
+    function Geometry:FuzzyEq(a, b, epsilon)
+        epsilon = epsilon or 0.001
+        return math.abs(a - b) <= epsilon
+    end
+    
+    function Geometry:IsClose(vec1, vec2, epsilon)
+        epsilon = epsilon or 0.001
+        return CompatLayer:GetDistance(vec1, vec2) <= epsilon
+    end
+    
+    return Geometry
+end
+
+function CompatLayer:GetDistance(pos1, pos2)
+    if pos1 and pos2 then
+        if pos1.Magnitude then
+            return (pos1 - pos2).Magnitude
+        else
+            local dx = pos1.x - pos2.x
+            local dy = pos1.y - pos2.y
+            return math.sqrt(dx*dx + dy*dy)
+        end
+    end
+    return 0
+end
+
+function CompatLayer:Raycast(origin, direction, raycastParams)
+    raycastParams = raycastParams or {}
+    local maxDistance = raycastParams.FilterDescendantsInstances or 1000
+    
+    if raycastParams.RaycastFilterType then
+        -- Advanced raycast with filtering
+        local result = workspace:FindPartOnRay(Ray.new(origin, direction * maxDistance), raycastParams.FilterDescendantsInstances)
+        return result
+    else
+        return workspace:FindPartOnRay(Ray.new(origin, direction * maxDistance))
+    end
+end
+
+function CompatLayer:FindPartOnRay(ray, ignoreDescendants, terrain)
+    local result = workspace:FindPartOnRay(ray, ignoreDescendants, terrain or false)
+    return result
+end
+
+function CompatLayer:GetTouchingParts(part)
+    if part.GetTouchingParts then
+        return part:GetTouchingParts()
+    end
+    return {}
+end
+
+function CompatLayer:Lerp(a, b, t)
+    if type(a) == "number" then
+        return a + (b - a) * t
+    else
+        return a + (b - a) * t
+    end
+end
+
+function CompatLayer:GetPartBoundsInRadius(position, radius)
+    local parts = {}
+    for _, part in pairs(workspace:GetChildren()) do
+        if part:IsA("BasePart") then
+            if CompatLayer:GetDistance(part.Position, position) <= radius then
+                table.insert(parts, part)
+            end
+        end
+    end
+    return parts
+end
+
+function CompatLayer:GetPartBoundsInBox(cframe, size)
+    local parts = {}
+    local tolerance = 0.1
+    for _, part in pairs(workspace:GetDescendants()) do
+        if part:IsA("BasePart") then
+            local closestPoint = cframe:ClosestPointOnBox(part.Position)
+            if CompatLayer:GetDistance(closestPoint, part.Position) < tolerance then
+                table.insert(parts, part)
+            end
+        end
+    end
+    return parts
+end
+
+function CompatLayer:MoveTo(part, position, cframe)
+    if part.MoveTo then
+        part:MoveTo(position or cframe.Position)
+    else
+        part.Position = position or cframe.Position
+        if cframe then
+            part.CFrame = cframe
+        end
+    end
+end
+
+function CompatLayer:GetDistanceBetween(pos1, pos2)
+    return CompatLayer:GetDistance(pos1, pos2)
+end
+
+function CompatLayer:Magnitude(vector)
+    if vector.Magnitude then
+        return vector.Magnitude
+    else
+        return math.sqrt(vector.x*vector.x + vector.y*vector.y + (vector.z and vector.z*vector.z or 0))
+    end
+end
+
+function CompatLayer:Unit(vector)
+    local mag = CompatLayer:Magnitude(vector)
+    if mag == 0 then return vector end
+    return vector / mag
+end
+
+-- ============================================================================
+-- DEBRIS SERVICE (Expanded)
+-- ============================================================================
+
+local DebrisQueue = {}
+
+function CompatLayer:AddItem(instance, delay)
+    delay = delay or 0
+    if delay <= 0 then
+        CompatLayer:Destroy(instance)
+    else
+        table.insert(DebrisQueue, {instance = instance, time = tick() + delay})
+        task.delay(delay, function()
+            CompatLayer:Destroy(instance)
+        end)
+    end
+end
+
+function CompatLayer:_InitDebrisService()
+    local DebrisService = {}
+    
+    function DebrisService:AddItem(instance, lifetimeSeconds)
+        lifetimeSeconds = lifetimeSeconds or 0
+        CompatLayer:AddItem(instance, lifetimeSeconds)
+    end
+    
+    return DebrisService
+end
+
+-- ============================================================================
+-- TABLE UTILITIES (Expanded)
+-- ============================================================================
+
+function CompatLayer:TableInsert(tbl, value)
+    table.insert(tbl, value)
+    return tbl
+end
+
+function CompatLayer:TableRemove(tbl, index)
+    return table.remove(tbl, index)
+end
+
+function CompatLayer:TableConcat(tbl, sep)
+    return table.concat(tbl, sep or "")
+end
+
+function CompatLayer:TableFind(tbl, value)
+    for i, v in pairs(tbl) do
+        if v == value then
+            return i
+        end
+    end
+    return nil
+end
+
+function CompatLayer:TableClear(tbl)
+    for k in pairs(tbl) do
+        tbl[k] = nil
+    end
+    return tbl
+end
+
+function CompatLayer:TableClone(tbl, deep)
+    local clone = {}
+    for k, v in pairs(tbl) do
+        if deep and type(v) == "table" then
+            clone[k] = CompatLayer:TableClone(v, true)
+        else
+            clone[k] = v
+        end
+    end
+    return clone
+end
+
+function CompatLayer:TableMerge(tbl1, tbl2)
+    local result = CompatLayer:TableClone(tbl1)
+    for k, v in pairs(tbl2) do
+        result[k] = v
+    end
+    return result
+end
+
+function CompatLayer:TableFilter(tbl, predicate)
+    local result = {}
+    for k, v in pairs(tbl) do
+        if predicate(v, k) then
+            table.insert(result, v)
+        end
+    end
+    return result
+end
+
+function CompatLayer:TableMap(tbl, transform)
+    local result = {}
+    for k, v in pairs(tbl) do
+        table.insert(result, transform(v, k))
+    end
+    return result
+end
+
+function CompatLayer:TableReduce(tbl, accumulator, initial)
+    local result = initial or 0
+    for k, v in pairs(tbl) do
+        result = accumulator(result, v, k)
+    end
+    return result
+end
+
+function CompatLayer:TableReverse(tbl)
+    local result = {}
+    for i = #tbl, 1, -1 do
+        table.insert(result, tbl[i])
+    end
+    return result
+end
+
+function CompatLayer:TableContains(tbl, value)
+    return CompatLayer:TableFind(tbl, value) ~= nil
+end
+
+function CompatLayer:TableUnpack(tbl)
+    return table.unpack(tbl)
+end
+
+-- ============================================================================
+-- COROUTINE & ASYNC (Expanded)
+-- ============================================================================
+
+function CompatLayer:CreateCoroutine(func)
+    return coroutine.create(func)
+end
+
+function CompatLayer:ResumeCoroutine(coro, ...)
+    return coroutine.resume(coro, ...)
+end
+
+function CompatLayer:YieldCoroutine()
+    return coroutine.yield()
+end
+
+function CompatLayer:CoroutineStatus(coro)
+    return coroutine.status(coro)
+end
+
+function CompatLayer:Spawn(func, ...)
+    local args = {...}
+    task.spawn(function()
+        func(table.unpack(args))
+    end)
+end
+
+function CompatLayer:Delay(delay, func, ...)
+    local args = {...}
+    task.delay(delay, function()
+        func(table.unpack(args))
+    end)
+end
+
+function CompatLayer:Defer(func, ...)
+    local args = {...}
+    task.defer(function()
+        func(table.unpack(args))
+    end)
+end
+
+function CompatLayer:Wait(seconds)
+    wait(seconds or 0)
+end
+
+function CompatLayer:Async(func, ...)
+    local result
+    local err
+    local done = false
+    
+    CompatLayer:Spawn(function()
+        local success, err_msg = pcall(func, ...)
+        if not success then
+            err = err_msg
+        end
+        done = true
+    end)
+    
+    return {
+        Wait = function()
+            while not done do
+                wait(0.01)
+            end
+            return result
+        end
+    }
+end
+
+-- ============================================================================
+-- DEBUGGING & UTILITIES (Expanded)
+-- ============================================================================
+
+function CompatLayer:Print(...)
+    print(...)
+end
+
+function CompatLayer:Warn(...)
+    warn(...)
+end
+
+function CompatLayer:Error(message)
+    error(message)
+end
+
+function CompatLayer:GetTick()
+    return tick()
+end
+
+function CompatLayer:GetTime()
+    return game.Workspace.DistributedGameTime or 0
+end
+
+function CompatLayer:Assert(condition, message)
+    if not condition then
+        error(message or "Assertion failed")
+    end
+end
+
+function CompatLayer:Trace()
+    return debug.traceback()
+end
+
+function CompatLayer:GetInfo(level)
+    level = level or 1
+    return debug.getinfo(level)
+end
+
+function CompatLayer:Type(value)
+    return type(value)
+end
+
+function CompatLayer:TypeName(value)
+    local t = type(value)
+    if t == "table" and value.Type then
+        return value.Type
+    end
+    return t
+end
+
+function CompatLayer:IsNumber(value)
+    return type(value) == "number"
+end
+
+function CompatLayer:IsString(value)
+    return type(value) == "string"
+end
+
+function CompatLayer:IsBoolean(value)
+    return type(value) == "boolean"
+end
+
+function CompatLayer:IsTable(value)
+    return type(value) == "table"
+end
+
+function CompatLayer:IsFunction(value)
+    return type(value) == "function"
+end
+
+function CompatLayer:IsNil(value)
+    return value == nil
+end
+
+function CompatLayer:Typeof(value)
+    if type(value) == "table" then
+        if value.Type then
+            return value.Type
+        elseif value.ClassName then
+            return value.ClassName
+        elseif value.Class then
+            return value.Class
+        end
+    end
+    return type(value)
+end
+
+function CompatLayer:HasProperty(instance, property)
+    if not instance then return false end
+    return instance[property] ~= nil
+end
+
+function CompatLayer:HasMethod(instance, method)
+    if not instance then return false end
+    return type(instance[method]) == "function"
+end
+
+local DEBUG_ENABLED = false
+
+function CompatLayer:EnableDebug(enabled)
+    DEBUG_ENABLED = enabled or not DEBUG_ENABLED
+end
+
+function CompatLayer:Debug(...)
+    if DEBUG_ENABLED then
+        print("[DEBUG]", ...)
+    end
+end
+
+function CompatLayer:Profile(func, name)
+    name = name or "Unknown"
+    local startTime = tick()
+    local result = func()
+    local elapsed = tick() - startTime
+    print("[PROFILE] " .. name .. " took " .. elapsed .. " seconds")
+    return result
+end
+
+-- ============================================================================
+-- MATH UTILITIES
+-- ============================================================================
+
+function CompatLayer:Clamp(value, min, max)
+    if value < min then return min end
+    if value > max then return max end
+    return value
+end
+
+function CompatLayer:Wrap(value, min, max)
+    local range = max - min
+    if range <= 0 then return min end
+    return min + ((value - min) % range)
+end
+
+function CompatLayer:Round(value, decimals)
+    decimals = decimals or 0
+    local multiplier = 10 ^ decimals
+    return math.floor(value * multiplier + 0.5) / multiplier
+end
+
+function CompatLayer:Sign(value)
+    if value > 0 then return 1 end
+    if value < 0 then return -1 end
+    return 0
+end
+
+function CompatLayer:Max(...)
+    return math.max(...)
+end
+
+function CompatLayer:Min(...)
+    return math.min(...)
+end
+
+function CompatLayer:Abs(value)
+    return math.abs(value)
+end
+
+function CompatLayer:Sqrt(value)
+    return math.sqrt(value)
+end
+
+function CompatLayer:Pow(base, exponent)
+    return math.pow(base, exponent)
+end
+
+function CompatLayer:Sin(value)
+    return math.sin(value)
+end
+
+function CompatLayer:Cos(value)
+    return math.cos(value)
+end
+
+function CompatLayer:Tan(value)
+    return math.tan(value)
+end
+
+function CompatLayer:Asin(value)
+    return math.asin(value)
+end
+
+function CompatLayer:Acos(value)
+    return math.acos(value)
+end
+
+function CompatLayer:Atan(value)
+    return math.atan(value)
+end
+
+function CompatLayer:Atan2(y, x)
+    return math.atan2(y, x)
+end
+
+function CompatLayer:Random(min, max)
+    if min and max then
+        return math.random(min, max)
+    elseif min then
+        return math.random(min)
+    else
+        return math.random()
+    end
+end
+
+function CompatLayer:Randomseed(seed)
+    math.randomseed(seed)
+end
+
+function CompatLayer:Rad(degrees)
+    return math.rad(degrees)
+end
+
+function CompatLayer:Deg(radians)
+    return math.deg(radians)
+end
+
+-- ============================================================================
+-- STRING UTILITIES
+-- ============================================================================
+
+function CompatLayer:StringUpper(str)
+    return string.upper(str)
+end
+
+function CompatLayer:StringLower(str)
+    return string.lower(str)
+end
+
+function CompatLayer:StringReverse(str)
+    return string.reverse(str)
+end
+
+function CompatLayer:StringLen(str)
+    return string.len(str)
+end
+
+function CompatLayer:StringSub(str, start, finish)
+    return string.sub(str, start, finish)
+end
+
+function CompatLayer:StringFind(str, pattern, plain)
+    return string.find(str, pattern, 1, plain)
+end
+
+function CompatLayer:StringGsub(str, pattern, replacement, limit)
+    return string.gsub(str, pattern, replacement, limit)
+end
+
+function CompatLayer:StringFormat(format, ...)
+    return string.format(format, ...)
+end
+
+function CompatLayer:StringSplit(str, delimiter)
+    delimiter = delimiter or " "
+    local result = {}
+    local pattern = "([^" .. delimiter .. "]+)"
+    for match in string.gmatch(str, pattern) do
+        table.insert(result, match)
+    end
+    return result
+end
+
+function CompatLayer:StringJoin(tbl, delimiter)
+    return table.concat(tbl, delimiter or "")
+end
+
+function CompatLayer:StringTrim(str)
+    return string.gsub(str, "^%s*(.-)%s*$", "%1")
+end
+
+function CompatLayer:StringStartsWith(str, prefix)
+    return string.sub(str, 1, string.len(prefix)) == prefix
+end
+
+function CompatLayer:StringEndsWith(str, suffix)
+    return string.sub(str, -string.len(suffix)) == suffix
+end
+
+function CompatLayer:StringReplace(str, old, new)
+    return string.gsub(str, old, new)
+end
+
+function CompatLayer:StringRepeat(str, times)
+    return string.rep(str, times)
+end
+
+-- ============================================================================
+-- COLOR & VISUAL UTILITIES
+-- ============================================================================
+
+function CompatLayer:LerpColor(color1, color2, t)
+    if color1.r and color2.r then
+        return CompatLayer:Color3(
+            color1.r + (color2.r - color1.r) * t,
+            color1.g + (color2.g - color1.g) * t,
+            color1.b + (color2.b - color1.b) * t
+        )
+    end
+    return color1
+end
+
+function CompatLayer:InvertColor(color)
+    if color.r then
+        return CompatLayer:Color3(1 - color.r, 1 - color.g, 1 - color.b)
+    end
+    return color
+end
+
+function CompatLayer:RandomColor()
+    return CompatLayer:Color3(math.random(), math.random(), math.random())
+end
+
+function CompatLayer:ColorBrightness(color)
+    if color.r then
+        return (color.r + color.g + color.b) / 3
+    end
+    return 1
+end
+
+-- ============================================================================
+-- COMMON CONSTANTS
+-- ============================================================================
+
+CompatLayer.Constants = {
+    PI = math.pi,
+    TAU = math.pi * 2,
+    E = math.exp(1),
+    PHI = (1 + math.sqrt(5)) / 2,
+    INFINITY = math.huge,
+    EPSILON = 0.00001,
+    DEG_TO_RAD = math.pi / 180,
+    RAD_TO_DEG = 180 / math.pi,
+}
+
+-- ============================================================================
+-- SECURITY & VALIDATION
+-- ============================================================================
+
+function CompatLayer:ValidateNumber(value, min, max)
+    if type(value) ~= "number" then return false end
+    if min and value < min then return false end
+    if max and value > max then return false end
+    return true
+end
+
+function CompatLayer:ValidateString(value, minLen, maxLen, pattern)
+    if type(value) ~= "string" then return false end
+    if minLen and string.len(value) < minLen then return false end
+    if maxLen and string.len(value) > maxLen then return false end
+    if pattern and not string.match(value, pattern) then return false end
+    return true
+end
+
+function CompatLayer:ValidateTable(value)
+    return type(value) == "table"
+end
+
+function CompatLayer:ValidateInstance(value, className)
+    if not value then return false end
+    if className then
+        return CompatLayer:IsA(value, className)
+    end
+    return type(value) == "userdata" or type(value) == "table"
+end
+
+function CompatLayer:SafeCall(func, ...)
+    local args = {...}
+    return pcall(function()
+        return func(table.unpack(args))
+    end)
+end
+
+function CompatLayer:TryCatch(func, catchFunc, finallyFunc)
+    local success, result = pcall(func)
+    if not success and catchFunc then
+        result = catchFunc(result)
+    end
+    if finallyFunc then
+        finallyFunc()
+    end
+    return success, result
+end
+
+-- ============================================================================
+-- MEMORY & PERFORMANCE
+-- ============================================================================
+
+function CompatLayer:GetMemoryUsage()
+    return collectgarbage("count")
+end
+
+function CompatLayer:ForceGarbageCollection()
+    collectgarbage("collect")
+end
+
+function CompatLayer:IsMemoryLow(threshold)
+    threshold = threshold or 50 * 1024 -- 50MB default
+    return CompatLayer:GetMemoryUsage() * 1024 > threshold
+end
+
+function CompatLayer:MeasureTime(func)
+    local startTime = tick()
+    local result = func()
+    local elapsed = tick() - startTime
+    return elapsed, result
+end
+
+-- ============================================================================
+-- HTTP & NETWORKING (Expanded)
+-- ============================================================================
+
+function CompatLayer:JsonEncode(table)
+    local HttpService = CompatLayer:GetService("HttpService")
+    return HttpService:JSONEncode(table)
+end
+
+function CompatLayer:JsonDecode(json)
+    local HttpService = CompatLayer:GetService("HttpService")
+    return HttpService:JSONDecode(json)
+end
+
+function CompatLayer:HttpGet(url, noCache)
+    local HttpService = CompatLayer:GetService("HttpService")
+    return HttpService:GetAsync(url, noCache)
+end
+
+function CompatLayer:HttpPost(url, data, contentType)
+    local HttpService = CompatLayer:GetService("HttpService")
+    return HttpService:PostAsync(url, data, contentType)
+end
+
+function CompatLayer:UrlEncode(str)
+    local HttpService = CompatLayer:GetService("HttpService")
+    return HttpService:UrlEncode(str)
+end
+
+-- ============================================================================
+-- TWEENINFO CONSTRUCTOR
+-- ============================================================================
+
+function CompatLayer:TweenInfo(duration, easingStyle, easingDirection, repeatCount, reverses, delay)
+    return {
+        Time = duration or 1,
+        EasingStyle = easingStyle or "Linear",
+        EasingDirection = easingDirection or "InOut",
+        RepeatCount = repeatCount or 0,
+        Reverses = reverses or false,
+        DelayTime = delay or 0,
+    }
+end
+
+function CompatLayer:LinearEase(t)
+    return t
+end
+
+function CompatLayer:QuadEase(t)
+    return t * t
+end
+
+function CompatLayer:CubicEase(t)
+    return t * t * t
+end
+
+function CompatLayer:QuartEase(t)
+    return t * t * t * t
+end
+
+function CompatLayer:QuintEase(t)
+    return t * t * t * t * t
+end
+
+function CompatLayer:SineEase(t)
+    return 1 - CompatLayer:Cos(t * CompatLayer.Constants.PI / 2)
+end
+
+function CompatLayer:ExpoEase(t)
+    if t == 0 then return 0 end
+    return CompatLayer:Pow(2, 10 * t - 10)
+end
+
+function CompatLayer:CircEase(t)
+    return 1 - CompatLayer:Sqrt(1 - CompatLayer:Pow(t, 2))
+end
+
+function CompatLayer:ElasticEase(t)
+    local c5 = (2 * CompatLayer.Constants.PI) / 4.5
+    if t == 0 then return 0 end
+    if t == 1 then return 1 end
+    return -CompatLayer:Pow(2, 10 * t - 10) * CompatLayer:Sin((t * 10 - 10.75) * c5)
+end
+
+function CompatLayer:BackEase(t)
+    local c1 = 1.70158
+    local c3 = c1 + 1
+    return c3 * t * t * t - c1 * t * t
+end
+
+function CompatLayer:BounceEase(t)
+    local n1 = 7.5625
+    local d1 = 2.75
+    if t < 1 / d1 then
+        return n1 * t * t
+    elseif t < 2 / d1 then
+        t = t - 1.5 / d1
+        return n1 * t * t + 0.75
+    elseif t < 2.5 / d1 then
+        t = t - 2.25 / d1
+        return n1 * t * t + 0.9375
+    else
+        t = t - 2.625 / d1
+        return n1 * t * t + 0.984375
+    end
+end
+
+-- ============================================================================
+-- INSTANCE ATTRIBUTE SYSTEM
+-- ============================================================================
+
+local InstanceAttributes = {}
+
+function CompatLayer:SetAttribute(instance, name, value)
+    if not instance then return end
+    if not InstanceAttributes[instance] then
+        InstanceAttributes[instance] = {}
+    end
+    InstanceAttributes[instance][name] = value
+end
+
+function CompatLayer:GetAttribute(instance, name)
+    if not instance or not InstanceAttributes[instance] then return nil end
+    return InstanceAttributes[instance][name]
+end
+
+function CompatLayer:RemoveAttribute(instance, name)
+    if instance and InstanceAttributes[instance] then
+        InstanceAttributes[instance][name] = nil
+    end
+end
+
+function CompatLayer:GetAttributes(instance)
+    return InstanceAttributes[instance] or {}
+end
+
+function CompatLayer:ClearAttributes(instance)
+    if instance then
+        InstanceAttributes[instance] = {}
+    end
+end
+
+-- ============================================================================
+-- ADVANCED LOGGING SYSTEM
+-- ============================================================================
+
+local LogHistory = {}
+local LogLevels = {
+    DEBUG = 0,
+    INFO = 1,
+    WARN = 2,
+    ERROR = 3,
+    FATAL = 4,
+}
+
+local CurrentLogLevel = LogLevels.DEBUG
+
+function CompatLayer:SetLogLevel(level)
+    if LogLevels[level] then
+        CurrentLogLevel = LogLevels[level]
+    end
+end
+
+function CompatLayer:LogDebug(message, ...)
+    if CurrentLogLevel <= LogLevels.DEBUG then
+        local formatted = string.format(message, ...)
+        table.insert(LogHistory, {level = "DEBUG", message = formatted, time = tick()})
+        print("[DEBUG]", formatted)
+    end
+end
+
+function CompatLayer:LogInfo(message, ...)
+    if CurrentLogLevel <= LogLevels.INFO then
+        local formatted = string.format(message, ...)
+        table.insert(LogHistory, {level = "INFO", message = formatted, time = tick()})
+        print("[INFO]", formatted)
+    end
+end
+
+function CompatLayer:LogWarn(message, ...)
+    if CurrentLogLevel <= LogLevels.WARN then
+        local formatted = string.format(message, ...)
+        table.insert(LogHistory, {level = "WARN", message = formatted, time = tick()})
+        warn("[WARN]", formatted)
+    end
+end
+
+function CompatLayer:LogError(message, ...)
+    if CurrentLogLevel <= LogLevels.ERROR then
+        local formatted = string.format(message, ...)
+        table.insert(LogHistory, {level = "ERROR", message = formatted, time = tick()})
+        error("[ERROR] " .. formatted)
+    end
+end
+
+function CompatLayer:GetLogHistory(limit)
+    limit = limit or 100
+    local result = {}
+    local start = math.max(1, #LogHistory - limit + 1)
+    for i = start, #LogHistory do
+        table.insert(result, LogHistory[i])
+    end
+    return result
+end
+
+function CompatLayer:ClearLogs()
+    LogHistory = {}
+end
+
+-- ============================================================================
+-- CACHING & MEMOIZATION SYSTEM
+-- ============================================================================
+
+local CacheStore = {}
+
+function CompatLayer:CreateCache(maxSize, ttl)
+    return {
+        data = {},
+        maxSize = maxSize or 999999,
+        ttl = ttl or math.huge,
+        createdAt = tick(),
+        accessTimes = {},
+    }
+end
+
+function CompatLayer:CacheSet(cache, key, value)
+    if not cache then return end
+    if #cache.data >= cache.maxSize then
+        local oldest = nil
+        local oldestTime = math.huge
+        for k, _ in pairs(cache.data) do
+            if cache.accessTimes[k] < oldestTime then
+                oldest = k
+                oldestTime = cache.accessTimes[k]
+            end
+        end
+        if oldest then
+            cache.data[oldest] = nil
+            cache.accessTimes[oldest] = nil
+        end
+    end
+    cache.data[key] = value
+    cache.accessTimes[key] = tick()
+end
+
+function CompatLayer:CacheGet(cache, key)
+    if cache and cache.data[key] then
+        cache.accessTimes[key] = tick()
+        return cache.data[key]
+    end
+    return nil
+end
+
+function CompatLayer:CacheDelete(cache, key)
+    if cache then
+        cache.data[key] = nil
+        cache.accessTimes[key] = nil
+    end
+end
+
+function CompatLayer:CacheClear(cache)
+    if cache then
+        cache.data = {}
+        cache.accessTimes = {}
+    end
+end
+
+function CompatLayer:Memoize(func, cache)
+    cache = cache or CompatLayer:CreateCache(100)
+    return function(...)
+        local key = CompatLayer:JsonEncode({...})
+        local cached = CompatLayer:CacheGet(cache, key)
+        if cached ~= nil then
+            return cached
+        end
+        local result = func(...)
+        CompatLayer:CacheSet(cache, key, result)
+        return result
+    end
+end
+
+-- ============================================================================
+-- OBJECT POOLING SYSTEM
+-- ============================================================================
+
+local ObjectPools = {}
+
+function CompatLayer:CreateObjectPool(factory, resetFunc, initialSize)
+    initialSize = initialSize or 10
+    local pool = {
+        factory = factory,
+        resetFunc = resetFunc,
+        available = {},
+        inUse = {},
+    }
+    for i = 1, initialSize do
+        table.insert(pool.available, factory())
+    end
+    return pool
+end
+
+function CompatLayer:PoolGet(pool)
+    if #pool.available > 0 then
+        local obj = table.remove(pool.available)
+        table.insert(pool.inUse, obj)
+        return obj
+    else
+        local obj = pool.factory()
+        table.insert(pool.inUse, obj)
+        return obj
+    end
+end
+
+function CompatLayer:PoolReturn(pool, object)
+    for i, obj in pairs(pool.inUse) do
+        if obj == object then
+            table.remove(pool.inUse, i)
+            break
+        end
+    end
+    if pool.resetFunc then
+        pool.resetFunc(object)
+    end
+    table.insert(pool.available, object)
+end
+
+function CompatLayer:PoolClear(pool)
+    for _, obj in pairs(pool.available) do
+        CompatLayer:Destroy(obj)
+    end
+    for _, obj in pairs(pool.inUse) do
+        CompatLayer:Destroy(obj)
+    end
+    pool.available = {}
+    pool.inUse = {}
+end
+
+function CompatLayer:PoolGetStats(pool)
+    return {
+        available = #pool.available,
+        inUse = #pool.inUse,
+        total = #pool.available + #pool.inUse,
+    }
+end
+
+-- ============================================================================
+-- STATE MACHINE SYSTEM
+-- ============================================================================
+
+function CompatLayer:CreateStateMachine(initialState, states)
+    states = states or {}
+    local machine = {
+        currentState = initialState,
+        states = states,
+        transitions = {},
+        onEnter = Signal.new(),
+        onExit = Signal.new(),
+        onStateChange = Signal.new(),
+    }
+    
+    function machine:AddState(name, enterFunc, updateFunc, exitFunc)
+        self.states[name] = {
+            enter = enterFunc,
+            update = updateFunc,
+            exit = exitFunc,
+        }
+    end
+    
+    function machine:AddTransition(fromState, toState, condition)
+        if not self.transitions[fromState] then
+            self.transitions[fromState] = {}
+        end
+        table.insert(self.transitions[fromState], {to = toState, condition = condition})
+    end
+    
+    function machine:UpdateStates()
+        if self.transitions[self.currentState] then
+            for _, transition in pairs(self.transitions[self.currentState]) do
+                if transition.condition() then
+                    self:ChangeState(transition.to)
+                    break
+                end
+            end
+        end
+        if self.states[self.currentState] and self.states[self.currentState].update then
+            self.states[self.currentState]:update()
+        end
+    end
+    
+    function machine:ChangeState(newState)
+        if self.states[self.currentState] and self.states[self.currentState].exit then
+            self.states[self.currentState]:exit()
+        end
+        self.onExit:Fire(self.currentState)
+        
+        self.currentState = newState
+        self.onStateChange:Fire(newState)
+        
+        if self.states[newState] and self.states[newState].enter then
+            self.states[newState]:enter()
+        end
+        self.onEnter:Fire(newState)
+    end
+    
+    function machine:GetState()
+        return self.currentState
+    end
+    
+    function machine:IsInState(state)
+        return self.currentState == state
+    end
+    
+    return machine
+end
+
+-- ============================================================================
+-- DEBOUNCE & THROTTLE SYSTEM
+-- ============================================================================
+
+function CompatLayer:Debounce(func, delay)
+    delay = delay or 0.1
+    local timer = 0
+    local lastCall = 0
+    
+    return function(...)
+        local now = tick()
+        if now - lastCall >= delay then
+            lastCall = now
+            return func(...)
+        end
+    end
+end
+
+function CompatLayer:Throttle(func, interval)
+    interval = interval or 0.1
+    local lastCall = 0
+    
+    return function(...)
+        local now = tick()
+        if now - lastCall >= interval then
+            lastCall = now
+            return func(...)
+        end
+    end
+end
+
+function CompatLayer:Once(func)
+    local called = false
+    local result = nil
+    
+    return function(...)
+        if not called then
+            called = true
+            result = func(...)
+        end
+        return result
+    end
+end
+
+-- ============================================================================
+-- VALUE OBJECTS
+-- ============================================================================
+
+function CompatLayer:NumberValue(value)
+    return {
+        Value = value or 0,
+        Type = "NumberValue",
+        Changed = Signal.new(),
+        
+        SetValue = function(self, newValue)
+            if self.Value ~= newValue then
+                self.Value = newValue
+                self.Changed:Fire(newValue)
+            end
+        end,
+        
+        GetValue = function(self)
+            return self.Value
+        end,
+    }
+end
+
+function CompatLayer:StringValue(value)
+    return {
+        Value = value or "",
+        Type = "StringValue",
+        Changed = Signal.new(),
+        
+        SetValue = function(self, newValue)
+            if self.Value ~= newValue then
+                self.Value = newValue
+                self.Changed:Fire(newValue)
+            end
+        end,
+        
+        GetValue = function(self)
+            return self.Value
+        end,
+    }
+end
+
+function CompatLayer:BoolValue(value)
+    return {
+        Value = value or false,
+        Type = "BoolValue",
+        Changed = Signal.new(),
+        
+        SetValue = function(self, newValue)
+            if self.Value ~= newValue then
+                self.Value = newValue
+                self.Changed:Fire(newValue)
+            end
+        end,
+        
+        GetValue = function(self)
+            return self.Value
+        end,
+    }
+end
+
+function CompatLayer:IntValue(value)
+    return {
+        Value = math.floor(value or 0),
+        Type = "IntValue",
+        Changed = Signal.new(),
+        
+        SetValue = function(self, newValue)
+            newValue = math.floor(newValue)
+            if self.Value ~= newValue then
+                self.Value = newValue
+                self.Changed:Fire(newValue)
+            end
+        end,
+        
+        GetValue = function(self)
+            return self.Value
+        end,
+    }
+end
+
+function CompatLayer:TableValue(value)
+    return {
+        Value = value or {},
+        Type = "TableValue",
+        Changed = Signal.new(),
+        
+        SetValue = function(self, newValue)
+            self.Value = newValue
+            self.Changed:Fire(newValue)
+        end,
+        
+        GetValue = function(self)
+            return self.Value
+        end,
+    }
+end
+
+-- ============================================================================
+-- CONFIGURATION SYSTEM
+-- ============================================================================
+
+local ConfigStore = {}
+
+function CompatLayer:CreateConfig(defaults)
+    return {
+        data = CompatLayer:TableClone(defaults or {}, true),
+        defaults = defaults or {},
+        changed = Signal.new(),
+    }
+end
+
+function CompatLayer:ConfigSet(config, key, value)
+    if not config then return end
+    config.data[key] = value
+    config.changed:Fire(key, value)
+end
+
+function CompatLayer:ConfigGet(config, key, default)
+    if not config then return default end
+    return config.data[key] or default
+end
+
+function CompatLayer:ConfigReset(config, key)
+    if not config then return end
+    if key then
+        config.data[key] = config.defaults[key]
+    else
+        config.data = CompatLayer:TableClone(config.defaults, true)
+    end
+end
+
+function CompatLayer:ConfigGetAll(config)
+    return config and config.data or {}
+end
+
+function CompatLayer:ConfigOnChange(config, callback)
+    return config and config.changed:Connect(callback) or nil
+end
+
+-- ============================================================================
+-- GESTURE RECOGNITION (Touch)
+-- ============================================================================
+
+local GestureDetector = {
+    lastTouchPos = nil,
+    lastTouchTime = 0,
+    touchStartPos = nil,
+    touchStartTime = 0,
+}
+
+function CompatLayer:OnSwipe(callback, minDistance)
+    minDistance = minDistance or 50
+    
+    return function(startPos, endPos, direction)
+        local distance = CompatLayer:GetDistance(startPos, endPos)
+        if distance >= minDistance then
+            callback(direction, distance)
+        end
+    end
+end
+
+function CompatLayer:DetectSwipe(startPos, endPos)
+    local dx = endPos.x - startPos.x
+    local dy = endPos.y - startPos.y
+    local distance = CompatLayer:GetDistance(startPos, endPos)
+    
+    if math.abs(dx) > math.abs(dy) then
+        return dx > 0 and "Right" or "Left", distance
+    else
+        return dy > 0 and "Down" or "Up", distance
+    end
+end
+
+function CompatLayer:DetectPinch(touch1Start, touch1End, touch2Start, touch2End)
+    local dist1 = CompatLayer:GetDistance(touch1Start, touch2Start)
+    local dist2 = CompatLayer:GetDistance(touch1End, touch2End)
+    local delta = dist2 - dist1
+    
+    if delta > 10 then
+        return "ZoomIn", delta
+    elseif delta < -10 then
+        return "ZoomOut", math.abs(delta)
+    else
+        return "Hold", 0
+    end
+end
+
+-- ============================================================================
+-- RESOURCE MANAGEMENT
+-- ============================================================================
+
+local ResourceManager = {
+    resources = {},
+    pools = {},
+}
+
+function CompatLayer:RegisterResource(name, resource)
+    ResourceManager.resources[name] = resource
+end
+
+function CompatLayer:GetResource(name)
+    return ResourceManager.resources[name]
+end
+
+function CompatLayer:UnloadResource(name)
+    if ResourceManager.resources[name] then
+        if ResourceManager.resources[name].Destroy then
+            ResourceManager.resources[name]:Destroy()
+        end
+        ResourceManager.resources[name] = nil
+    end
+end
+
+function CompatLayer:UnloadAllResources()
+    for name, resource in pairs(ResourceManager.resources) do
+        if resource.Destroy then
+            resource:Destroy()
+        end
+    end
+    ResourceManager.resources = {}
+end
+
+function CompatLayer:GetResourceCount()
+    local count = 0
+    for _ in pairs(ResourceManager.resources) do
+        count = count + 1
+    end
+    return count
+end
+
+-- ============================================================================
+-- MATRIX OPERATIONS
+-- ============================================================================
+
+function CompatLayer:Matrix2x2(a, b, c, d)
+    return {
+        {a, b},
+        {c, d},
+        rows = 2,
+        cols = 2,
+    }
+end
+
+function CompatLayer:Matrix3x3(...)
+    local values = {...}
+    return {
+        {values[1], values[2], values[3]},
+        {values[4], values[5], values[6]},
+        {values[7], values[8], values[9]},
+        rows = 3,
+        cols = 3,
+    }
+end
+
+function CompatLayer:MatrixMultiply(m1, m2)
+    local result = {}
+    for i = 1, m1.rows do
+        result[i] = {}
+        for j = 1, m2.cols do
+            result[i][j] = 0
+            for k = 1, m1.cols do
+                result[i][j] = result[i][j] + (m1[i][k] or 0) * (m2[k][j] or 0)
+            end
+        end
+    end
+    result.rows = m1.rows
+    result.cols = m2.cols
+    return result
+end
+
+function CompatLayer:MatrixTranspose(matrix)
+    local result = {}
+    for j = 1, matrix.cols do
+        result[j] = {}
+        for i = 1, matrix.rows do
+            result[j][i] = matrix[i][j]
+        end
+    end
+    result.rows = matrix.cols
+    result.cols = matrix.rows
+    return result
+end
+
+function CompatLayer:MatrixDeterminant(matrix)
+    if matrix.rows == 2 and matrix.cols == 2 then
+        return (matrix[1][1] or 0) * (matrix[2][2] or 0) - (matrix[1][2] or 0) * (matrix[2][1] or 0)
+    elseif matrix.rows == 3 and matrix.cols == 3 then
+        local m = matrix
+        return (
+            (m[1][1] or 0) * ((m[2][2] or 0) * (m[3][3] or 0) - (m[2][3] or 0) * (m[3][2] or 0)) -
+            (m[1][2] or 0) * ((m[2][1] or 0) * (m[3][3] or 0) - (m[2][3] or 0) * (m[3][1] or 0)) +
+            (m[1][3] or 0) * ((m[2][1] or 0) * (m[3][2] or 0) - (m[2][2] or 0) * (m[3][1] or 0))
+        )
+    end
+    return 0
+end
+
+-- ============================================================================
+-- QUATERNION OPERATIONS (For rotations)
+-- ============================================================================
+
+function CompatLayer:QuaternionFrom(x, y, z, w)
+    return {x = x or 0, y = y or 0, z = z or 0, w = w or 1, Type = "Quaternion"}
+end
+
+function CompatLayer:QuaternionFromAxisAngle(axis, angle)
+    local halfAngle = angle / 2
+    local sinHalf = CompatLayer:Sin(halfAngle)
+    return {
+        x = axis.x * sinHalf,
+        y = axis.y * sinHalf,
+        z = axis.z * sinHalf,
+        w = CompatLayer:Cos(halfAngle),
+        Type = "Quaternion"
+    }
+end
+
+function CompatLayer:QuaternionMultiply(q1, q2)
+    return {
+        x = q1.w * q2.x + q1.x * q2.w + q1.y * q2.z - q1.z * q2.y,
+        y = q1.w * q2.y - q1.x * q2.z + q1.y * q2.w + q1.z * q2.x,
+        z = q1.w * q2.z + q1.x * q2.y - q1.y * q2.x + q1.z * q2.w,
+        w = q1.w * q2.w - q1.x * q2.x - q1.y * q2.y - q1.z * q2.z,
+        Type = "Quaternion"
+    }
+end
+
+function CompatLayer:QuaternionConjugate(q)
+    return {x = -q.x, y = -q.y, z = -q.z, w = q.w, Type = "Quaternion"}
+end
+
+function CompatLayer:QuaternionMagnitude(q)
+    return CompatLayer:Sqrt(q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w)
+end
+
+function CompatLayer:QuaternionNormalize(q)
+    local mag = CompatLayer:QuaternionMagnitude(q)
+    if mag == 0 then return q end
+    return {x = q.x/mag, y = q.y/mag, z = q.z/mag, w = q.w/mag, Type = "Quaternion"}
+end
+
+function CompatLayer:QuaternionSlerp(q1, q2, t)
+    local dot = q1.x*q2.x + q1.y*q2.y + q1.z*q2.z + q1.w*q2.w
+    if dot < 0 then
+        q2 = {x = -q2.x, y = -q2.y, z = -q2.z, w = -q2.w}
+        dot = -dot
+    end
+    dot = CompatLayer:Clamp(dot, -1, 1)
+    local theta = CompatLayer:Acos(dot)
+    local sinTheta = CompatLayer:Sin(theta)
+    
+    if sinTheta == 0 then
+        return q1
+    end
+    
+    local w1 = CompatLayer:Sin((1 - t) * theta) / sinTheta
+    local w2 = CompatLayer:Sin(t * theta) / sinTheta
+    
+    return {
+        x = q1.x * w1 + q2.x * w2,
+        y = q1.y * w1 + q2.y * w2,
+        z = q1.z * w1 + q2.z * w2,
+        w = q1.w * w1 + q2.w * w2,
+        Type = "Quaternion"
+    }
+end
+
+-- ============================================================================
+-- EVENT BUS (Global Event System)
+-- ============================================================================
+
+local EventBus = {}
+local EventBusChannels = {}
+
+function CompatLayer:CreateEventBus()
+    return {
+        _channels = {},
+        
+        On = function(self, channel, callback)
+            if not self._channels[channel] then
+                self._channels[channel] = Signal.new()
+            end
+            return self._channels[channel]:Connect(callback)
+        end,
+        
+        Emit = function(self, channel, ...)
+            if self._channels[channel] then
+                self._channels[channel]:Fire(...)
+            end
+        end,
+        
+        Once = function(self, channel, callback)
+            local connection
+            local wrapped = function(...)
+                callback(...)
+                connection:Disconnect()
+            end
+            connection = self:On(channel, wrapped)
+            return connection
+        end,
+        
+        Off = function(self, channel, connection)
+            if connection then
+                connection:Disconnect()
+            end
+        end,
+        
+        Clear = function(self, channel)
+            if channel then
+                if self._channels[channel] then
+                    self._channels[channel]:DisconnectAll()
+                end
+            else
+                for ch, sig in pairs(self._channels) do
+                    sig:DisconnectAll()
+                end
+                self._channels = {}
+            end
+        end,
+    }
+end
+
+-- ============================================================================
+-- BEST PRACTICES & DESIGN PATTERNS
+-- ============================================================================
+
+function CompatLayer:CreateSingleton(constructor)
+    local instance = nil
+    
+    return function()
+        if not instance then
+            instance = constructor()
+        end
+        return instance
+    end
+end
+
+function CompatLayer:CreateFactory(constructor)
+    return function(...)
+        return constructor(...)
+    end
+end
+
+function CompatLayer:CreateObserver(subject)
+    local observers = {}
+    
+    return {
+        Subscribe = function(self, observer)
+            table.insert(observers, observer)
+        end,
+        
+        Unsubscribe = function(self, observer)
+            for i, obs in pairs(observers) do
+                if obs == observer then
+                    table.remove(observers, i)
+                    break
+                end
+            end
+        end,
+        
+        Notify = function(self, ...)
+            for _, observer in pairs(observers) do
+                if type(observer) == "function" then
+                    observer(...)
+                elseif observer.Update then
+                    observer:Update(...)
+                end
+            end
+        end,
+    }
+end
+
+-- ============================================================================
+-- TIME & DELTA UTILITIES
+-- ============================================================================
+
+local DeltaTime = {
+    lastFrame = tick(),
+    currentFrame = tick(),
+    delta = 0,
+    totalTime = 0,
+    frameCount = 0,
+}
+
+function CompatLayer:UpdateDeltaTime()
+    DeltaTime.lastFrame = DeltaTime.currentFrame
+    DeltaTime.currentFrame = tick()
+    DeltaTime.delta = DeltaTime.currentFrame - DeltaTime.lastFrame
+    DeltaTime.totalTime = DeltaTime.totalTime + DeltaTime.delta
+    DeltaTime.frameCount = DeltaTime.frameCount + 1
+end
+
+function CompatLayer:GetDeltaTime()
+    return DeltaTime.delta
+end
+
+function CompatLayer:GetTotalTime()
+    return DeltaTime.totalTime
+end
+
+function CompatLayer:GetFrameCount()
+    return DeltaTime.frameCount
+end
+
+function CompatLayer:GetFPS()
+    return DeltaTime.delta > 0 and (1 / DeltaTime.delta) or 0
+end
+
+-- ============================================================================
+-- WEIGHTED RANDOM SELECTION
+-- ============================================================================
+
+function CompatLayer:CreateWeightedTable(items)
+    -- items = {{value = x, weight = w}, ...}
+    local total = 0
+    for _, item in pairs(items) do
+        total = total + item.weight
+    end
+    
+    return {
+        items = items,
+        total = total,
+        
+        Select = function(self)
+            local rand = CompatLayer:Random() * self.total
+            local current = 0
+            for _, item in pairs(self.items) do
+                current = current + item.weight
+                if rand <= current then
+                    return item.value
+                end
+            end
+            return self.items[#self.items].value
+        end,
+    }
+end
+
+-- ============================================================================
+-- 2D GRID & PATHFINDING
+-- ============================================================================
+
+function CompatLayer:CreateGrid(width, height, defaultValue)
+    defaultValue = defaultValue or 0
+    local grid = {width = width, height = height, data = {}}
+    
+    for x = 1, width do
+        grid.data[x] = {}
+        for y = 1, height do
+            grid.data[x][y] = defaultValue
+        end
+    end
+    
+    function grid:Set(x, y, value)
+        if x >= 1 and x <= self.width and y >= 1 and y <= self.height then
+            self.data[x][y] = value
+        end
+    end
+    
+    function grid:Get(x, y)
+        if x >= 1 and x <= self.width and y >= 1 and y <= self.height then
+            return self.data[x][y]
+        end
+        return nil
+    end
+    
+    function grid:IsWalkable(x, y)
+        return self:Get(x, y) == 0
+    end
+    
+    function grid:GetNeighbors(x, y, diagonal)
+        local neighbors = {}
+        local directions = {
+            {x+1, y}, {x-1, y}, {x, y+1}, {x, y-1},
+        }
+        if diagonal then
+            table.insert(directions, {x+1, y+1})
+            table.insert(directions, {x-1, y-1})
+            table.insert(directions, {x+1, y-1})
+            table.insert(directions, {x-1, y+1})
+        end
+        for _, dir in pairs(directions) do
+            if self:IsWalkable(dir[1], dir[2]) then
+                table.insert(neighbors, {dir[1], dir[2]})
+            end
+        end
+        return neighbors
+    end
+    
+    return grid
+end
+
+-- ============================================================================
+-- BITWISE OPERATIONS
+-- ============================================================================
+
+function CompatLayer:BitAnd(a, b)
+    local result = 0
+    for i = 0, 31 do
+        if (math.floor(a / (2^i)) % 2) == 1 and (math.floor(b / (2^i)) % 2) == 1 then
+            result = result + 2^i
+        end
+    end
+    return result
+end
+
+function CompatLayer:BitOr(a, b)
+    local result = 0
+    for i = 0, 31 do
+        if (math.floor(a / (2^i)) % 2) == 1 or (math.floor(b / (2^i)) % 2) == 1 then
+            result = result + 2^i
+        end
+    end
+    return result
+end
+
+function CompatLayer:BitXor(a, b)
+    local result = 0
+    for i = 0, 31 do
+        local bitA = math.floor(a / (2^i)) % 2
+        local bitB = math.floor(b / (2^i)) % 2
+        if bitA ~= bitB then
+            result = result + 2^i
+        end
+    end
+    return result
+end
+
+function CompatLayer:BitNot(a)
+    return 4294967295 - a
+end
+
+function CompatLayer:BitShiftLeft(a, n)
+    return a * (2^n)
+end
+
+function CompatLayer:BitShiftRight(a, n)
+    return math.floor(a / (2^n))
+end
+
+function CompatLayer:HasBit(value, bit)
+    return CompatLayer:BitAnd(value, 2^bit) ~= 0
+end
+
+function CompatLayer:SetBit(value, bit)
+    return CompatLayer:BitOr(value, 2^bit)
+end
+
+function CompatLayer:ClearBit(value, bit)
+    return CompatLayer:BitAnd(value, CompatLayer:BitNot(2^bit))
+end
+
+-- ============================================================================
+-- UTILITY CHECK FUNCTIONS
+-- ============================================================================
+
+function CompatLayer:IsEmpty(obj)
+    if obj == nil then return true end
+    if type(obj) == "string" then return obj == "" end
+    if type(obj) == "table" then
+        for _ in pairs(obj) do return false end
+        return true
+    end
+    return false
+end
+
+function CompatLayer:IsValid(obj)
+    if obj == nil then return false end
+    if type(obj) == "userdata" or type(obj) == "table" then
+        return true
+    end
+    return true
+end
+
+function CompatLayer:SafeIndex(tbl, ...)
+    local current = tbl
+    local keys = {...}
+    for _, key in pairs(keys) do
+        if type(current) == "table" then
+            current = current[key]
+        else
+            return nil
+        end
+    end
+    return current
+end
+
+-- Make common services global for ease of use
+_G.game = game
+_G.workspace = workspace
+_G.script = script
+
+-- Common shortcuts
+_G.Compat = CompatLayer
+_G.Tween = CompatLayer:GetService("TweenService")
+_G.Players = CompatLayer:GetService("Players")
+_G.RunService = CompatLayer:GetService("RunService")
+_G.UserInput = CompatLayer:GetService("UserInputService")
+_G.DataStore = CompatLayer:GetService("DataStoreService")
+_G.Http = CompatLayer:GetService("HttpService")
+_G.Chat = CompatLayer:GetService("ChatService")
+_G.Badge = CompatLayer:GetService("BadgeService")
+_G.Marketplace = CompatLayer:GetService("MarketplaceService")
+
+-- Math constants
+_G.PI = CompatLayer.Constants.PI
+_G.TAU = CompatLayer.Constants.TAU
+_G.EPSILON = CompatLayer.Constants.EPSILON
+_G.INFINITY = CompatLayer.Constants.INFINITY
+
+-- Utility shortcuts
+_G.Spawn = CompatLayer.Spawn
+_G.Delay = CompatLayer.Delay
+_G.Wait = CompatLayer.Wait
+_G.Print = CompatLayer.Print
+_G.Warn = CompatLayer.Warn
+
+-- Advanced shortcuts
+_G.EventBus = CompatLayer:CreateEventBus()
+_G.CreateSingleton = CompatLayer.CreateSingleton
+_G.CreateFactory = CompatLayer.CreateFactory
+_G.CreateObserver = CompatLayer.CreateObserver
+_G.CreateCache = CompatLayer.CreateCache
+_G.CreateGrid = CompatLayer.CreateGrid
+_G.CreateWeightedTable = CompatLayer.CreateWeightedTable
+
+-- OOP Shortcuts
+_G.Class = function(...) return CompatLayer:Class(...) end
+_G.CreateEntity = function(...) return CompatLayer:CreateEntity(...) end
+_G.CreateComponent = function(...) return CompatLayer:CreateComponent(...) end
+_G.CreateSystem = function(...) return CompatLayer:CreateSystem(...) end
+_G.CreateBehaviorTree = function(...) return CompatLayer:CreateBehaviorTree(...) end
+
+-- Component shortcuts
+_G.TransformComponent = function() return CompatLayer:CreateTransformComponent() end
+_G.RigidbodyComponent = function(...) return CompatLayer:CreateRigidbodyComponent(...) end
+_G.ColliderComponent = function(...) return CompatLayer:CreateColliderComponent(...) end
+_G.AnimatorComponent = function() return CompatLayer:CreateAnimatorComponent() end
+_G.SpriteComponent = function(...) return CompatLayer:CreateSpriteComponent(...) end
+
+-- System shortcuts
+_G.CreateTaskQueue = function() return CompatLayer:CreateTaskQueue() end
+_G.CreateParticleSystem = function(...) return CompatLayer:CreateParticleSystem(...) end
+_G.CreateMemoryPool = function(...) return CompatLayer:CreateMemoryPool(...) end
+_G.CreateKeyframeSequence = function(...) return CompatLayer:CreateKeyframeSequence(...) end
+
+-- Plugin shortcuts
+_G.RegisterPlugin = function(...) return CompatLayer:RegisterPlugin(...) end
+_G.UnloadPlugin = function(...) return CompatLayer:UnloadPlugin(...) end
+_G.GetPlugin = function(...) return CompatLayer:GetPlugin(...) end
+
+-- Decorator shortcuts
+_G.Memoized = function(...) return CompatLayer:Memoized(...) end
+_G.Debounced = function(...) return CompatLayer:Debounced(...) end
+_G.Throttled = function(...) return CompatLayer:Throttled(...) end
+
+-- Delta time shortcuts
+_G.GetDeltaTime = function() return CompatLayer:GetDeltaTime() end
+_G.GetFPS = function() return CompatLayer:GetFPS() end
+_G.GetFrameCount = function() return CompatLayer:GetFrameCount() end
+
+-- ID & UUID shortcuts
+_G.GenerateUUID = function() return CompatLayer:GenerateUUID() end
+_G.GenerateId = function(...) return CompatLayer:GenerateShortId(...) end
+
+-- ============================================================================
+-- OBJECT-ORIENTED PROGRAMMING SYSTEM
+-- ============================================================================
+
+-- Base class system with inheritance
+function CompatLayer:Class(name, baseClass)
+    local class = {
+        __name = name,
+        __baseClass = baseClass,
+        __methods = {},
+        __properties = {},
+        __private = {},
+    }
+    
+    function class:__index(key)
+        if class[key] then return class[key] end
+        if class.__methods[key] then return class.__methods[key] end
+        if baseClass and baseClass[key] then return baseClass[key] end
+        return nil
+    end
+    
+    function class:__newindex(key, value)
+        if type(value) == "function" then
+            class.__methods[key] = value
+        else
+            rawset(class, key, value)
+        end
+    end
+    
+    function class:new(...)
+        local instance = setmetatable({}, class)
+        instance.__class = class
+        instance.__name = name
+        if instance.Init then
+            instance:Init(...)
+        end
+        return instance
+    end
+    
+    function class:IsA(className)
+        if class.__name == className then return true end
+        if class.__baseClass then
+            return class.__baseClass:IsA(className)
+        end
+        return false
+    end
+    
+    function class:SetProperty(name, value)
+        class.__properties[name] = value
+    end
+    
+    function class:GetProperty(name)
+        return class.__properties[name]
+    end
+    
+    function class:SetPrivate(name, value)
+        class.__private[name] = value
+    end
+    
+    function class:GetPrivate(name)
+        return class.__private[name]
+    end
+    
+    function class:Extends(baseClass)
+        class.__baseClass = baseClass
+    end
+    
+    function class:Super(methodName, ...)
+        if class.__baseClass and class.__baseClass.__methods[methodName] then
+            return class.__baseClass.__methods[methodName](self, ...)
+        end
+    end
+    
+    setmetatable(class, class)
+    return class
+end
+
+-- ============================================================================
+-- ENTITY-COMPONENT-SYSTEM (ECS)
+-- ============================================================================
+
+function CompatLayer:CreateEntity(id)
+    return {
+        ID = id or CompatLayer:GenerateUUID(),
+        Components = {},
+        Active = true,
+        
+        AddComponent = function(self, componentName, component)
+            self.Components[componentName] = component
+            component.Entity = self
+            if component.OnAttach then
+                component:OnAttach()
+            end
+        end,
+        
+        RemoveComponent = function(self, componentName)
+            if self.Components[componentName] then
+                if self.Components[componentName].OnDetach then
+                    self.Components[componentName]:OnDetach()
+                end
+                self.Components[componentName] = nil
+            end
+        end,
+        
+        GetComponent = function(self, componentName)
+            return self.Components[componentName]
+        end,
+        
+        HasComponent = function(self, componentName)
+            return self.Components[componentName] ~= nil
+        end,
+        
+        Update = function(self, deltaTime)
+            for name, component in pairs(self.Components) do
+                if component.Update then
+                    component:Update(deltaTime)
+                end
+            end
+        end,
+    }
+end
+
+function CompatLayer:CreateComponent(name, methods)
+    local component = {
+        __name = name,
+    }
+    
+    for methodName, method in pairs(methods or {}) do
+        component[methodName] = method
+    end
+    
+    return component
+end
+
+function CompatLayer:CreateSystem(name, methods)
+    local system = {
+        __name = name,
+        Entities = {},
+    }
+    
+    for methodName, method in pairs(methods or {}) do
+        system[methodName] = method
+    end
+    
+    function system:AddEntity(entity)
+        table.insert(self.Entities, entity)
+    end
+    
+    function system:RemoveEntity(entity)
+        for i, e in pairs(self.Entities) do
+            if e.ID == entity.ID then
+                table.remove(self.Entities, i)
+                break
+            end
+        end
+    end
+    
+    function system:Update(deltaTime)
+        for _, entity in pairs(self.Entities) do
+            if entity.Active and self.ProcessEntity then
+                self:ProcessEntity(entity, deltaTime)
+            end
+        end
+    end
+    
+    return system
+end
+
+-- ============================================================================
+-- COMPONENT TYPES
+-- ============================================================================
+
+function CompatLayer:CreateTransformComponent()
+    return {
+        Position = Vector3.new(0, 0, 0),
+        Rotation = Vector3.new(0, 0, 0),
+        Scale = Vector3.new(1, 1, 1),
+        
+        Translate = function(self, offset)
+            self.Position = self.Position + offset
+        end,
+        
+        Rotate = function(self, angles)
+            self.Rotation = self.Rotation + angles
+        end,
+        
+        SetScale = function(self, scale)
+            self.Scale = scale
+        end,
+        
+        GetCFrame = function(self)
+            return CFrame.new(self.Position) * CFrame.Angles(self.Rotation.x, self.Rotation.y, self.Rotation.z)
+        end,
+    }
+end
+
+function CompatLayer:CreateRigidbodyComponent(mass, velocity)
+    return {
+        Mass = mass or 1,
+        Velocity = velocity or Vector3.new(0, 0, 0),
+        Acceleration = Vector3.new(0, -9.81, 0),
+        Drag = 0.1,
+        UseGravity = true,
+        
+        ApplyForce = function(self, force)
+            self.Acceleration = self.Acceleration + (force / self.Mass)
+        end,
+        
+        SetVelocity = function(self, vel)
+            self.Velocity = vel
+        end,
+        
+        Update = function(self, deltaTime)
+            if self.UseGravity then
+                self.Velocity = self.Velocity + self.Acceleration * deltaTime
+            end
+            self.Velocity = self.Velocity * (1 - self.Drag * deltaTime)
+        end,
+    }
+end
+
+function CompatLayer:CreateColliderComponent(type, size)
+    return {
+        Type = type or "Box",
+        Size = size or Vector3.new(1, 1, 1),
+        IsTrigger = false,
+        Layer = 0,
+        
+        CheckCollision = function(self, other)
+            if self.Type == "Box" and other.Type == "Box" then
+                return true
+            end
+            return false
+        end,
+    }
+end
+
+function CompatLayer:CreateAnimatorComponent()
+    return {
+        Animations = {},
+        CurrentAnimation = nil,
+        IsPlaying = false,
+        
+        AddAnimation = function(self, name, frames, speed)
+            self.Animations[name] = {
+                Frames = frames,
+                Speed = speed,
+                CurrentFrame = 1,
+            }
+        end,
+        
+        Play = function(self, animationName)
+            if self.Animations[animationName] then
+                self.CurrentAnimation = animationName
+                self.IsPlaying = true
+            end
+        end,
+        
+        Stop = function(self)
+            self.IsPlaying = false
+        end,
+        
+        Update = function(self, deltaTime)
+            if self.IsPlaying and self.CurrentAnimation then
+                local anim = self.Animations[self.CurrentAnimation]
+                anim.CurrentFrame = anim.CurrentFrame + anim.Speed * deltaTime
+                if anim.CurrentFrame >= #anim.Frames then
+                    anim.CurrentFrame = 1
+                end
+            end
+        end,
+    }
+end
+
+function CompatLayer:CreateSpriteComponent(textureId, width, height)
+    return {
+        TextureId = textureId,
+        Width = width or 32,
+        Height = height or 32,
+        Tint = {r = 1, g = 1, b = 1},
+        Alpha = 1,
+        Rotation = 0,
+        
+        SetTint = function(self, r, g, b)
+            self.Tint = {r = r, g = g, b = b}
+        end,
+        
+        SetAlpha = function(self, alpha)
+            self.Alpha = CompatLayer:Clamp(alpha, 0, 1)
+        end,
+        
+        Rotate = function(self, angle)
+            self.Rotation = angle
+        end,
+    }
+end
+
+-- ============================================================================
+-- BEHAVIOR TREE SYSTEM
+-- ============================================================================
+
+function CompatLayer:CreateBehaviorTree()
+    local tree = {
+        Root = nil,
+        Status = "Idle",
+    }
+    
+    function tree:SetRoot(node)
+        self.Root = node
+    end
+    
+    function tree:Execute()
+        if self.Root then
+            self.Status = self:ExecuteNode(self.Root)
+            return self.Status
+        end
+    end
+    
+    function tree:ExecuteNode(node)
+        if node.Type == "Selector" then
+            for _, child in pairs(node.Children or {}) do
+                local status = self:ExecuteNode(child)
+                if status == "Success" then return "Success" end
+            end
+            return "Failure"
+        elseif node.Type == "Sequence" then
+            for _, child in pairs(node.Children or {}) do
+                local status = self:ExecuteNode(child)
+                if status == "Failure" then return "Failure" end
+            end
+            return "Success"
+        elseif node.Type == "Task" then
+            if node.Execute then
+                local result = node:Execute()
+                return result and "Success" or "Failure"
+            end
+            return "Success"
+        end
+        return "Idle"
+    end
+    
+    return tree
+end
+
+function CompatLayer:CreateBehaviorNode(type, children)
+    return {
+        Type = type,
+        Children = children or {},
+    }
+end
+
+-- ============================================================================
+-- PLUGIN SYSTEM
+-- ============================================================================
+
+local Plugins = {}
+local PluginHooks = {}
+
+function CompatLayer:RegisterPlugin(name, plugin)
+    Plugins[name] = plugin
+    if plugin.Init then
+        plugin:Init()
+    end
+end
+
+function CompatLayer:UnloadPlugin(name)
+    if Plugins[name] and Plugins[name].Destroy then
+        Plugins[name]:Destroy()
+    end
+    Plugins[name] = nil
+end
+
+function CompatLayer:RegisterHook(hookName, callback)
+    if not PluginHooks[hookName] then
+        PluginHooks[hookName] = {}
+    end
+    table.insert(PluginHooks[hookName], callback)
+end
+
+function CompatLayer:ExecuteHook(hookName, ...)
+    if PluginHooks[hookName] then
+        for _, callback in pairs(PluginHooks[hookName]) do
+            callback(...)
+        end
+    end
+end
+
+function CompatLayer:GetPlugin(name)
+    return Plugins[name]
+end
+
+function CompatLayer:ListPlugins()
+    local list = {}
+    for name, _ in pairs(Plugins) do
+        table.insert(list, name)
+    end
+    return list
+end
+
+-- ============================================================================
+-- DECORATOR SYSTEM
+-- ============================================================================
+
+function CompatLayer:Memoized(func)
+    local cache = {}
+    return function(...)
+        local key = CompatLayer:JsonEncode({...})
+        if cache[key] == nil then
+            cache[key] = func(...)
+        end
+        return cache[key]
+    end
+end
+
+function CompatLayer:Throttled(func, delay)
+    local lastCall = 0
+    return function(...)
+        local now = tick()
+        if now - lastCall >= delay then
+            lastCall = now
+            return func(...)
+        end
+    end
+end
+
+function CompatLayer:Debounced(func, delay)
+    local timer = nil
+    return function(...)
+        if timer then
+            task.cancel(timer)
+        end
+        timer = task.delay(delay, function()
+            func(...)
+        end)
+    end
+end
+
+function CompatLayer:Retry(func, maxAttempts, delay)
+    delay = delay or 1
+    for attempt = 1, maxAttempts do
+        local success, result = pcall(func)
+        if success then
+            return result
+        end
+        if attempt < maxAttempts then
+            wait(delay)
+        end
+    end
+    error("Failed after " .. maxAttempts .. " attempts")
+end
+
+-- ============================================================================
+-- TASK QUEUE SYSTEM
+-- ============================================================================
+
+function CompatLayer:CreateTaskQueue()
+    return {
+        tasks = {},
+        running = false,
+        paused = false,
+        
+        Enqueue = function(self, task)
+            table.insert(self.tasks, task)
+        end,
+        
+        Dequeue = function(self)
+            return table.remove(self.tasks, 1)
+        end,
+        
+        ProcessAll = function(self)
+            self.running = true
+            while #self.tasks > 0 and not self.paused do
+                local task = self:Dequeue()
+                if task then
+                    task()
+                end
+            end
+            self.running = false
+        end,
+        
+        Pause = function(self)
+            self.paused = true
+        end,
+        
+        Resume = function(self)
+            self.paused = false
+            self:ProcessAll()
+        end,
+        
+        Clear = function(self)
+            self.tasks = {}
+        end,
+        
+        GetCount = function(self)
+            return #self.tasks
+        end,
+    }
+end
+
+-- ============================================================================
+-- PARTICLE SYSTEM
+-- ============================================================================
+
+function CompatLayer:CreateParticleSystem(maxParticles)
+    maxParticles = maxParticles or 1000
+    
+    return {
+        Particles = {},
+        MaxParticles = maxParticles,
+        EmissionRate = 10,
+        Lifetime = 2,
+        Speed = 5,
+        Color = {r = 1, g = 1, b = 1},
+        Size = Vector3.new(0.1, 0.1, 0.1),
+        
+        Emit = function(self, count, position, direction)
+            for i = 1, count do
+                if #self.Particles < self.MaxParticles then
+                    table.insert(self.Particles, {
+                        Position = position or Vector3.new(0, 0, 0),
+                        Velocity = (direction or Vector3.new(0, 1, 0)):Unit() * self.Speed,
+                        Age = 0,
+                        Lifetime = self.Lifetime,
+                        Size = CompatLayer:TableClone(self.Size),
+                        Color = CompatLayer:TableClone(self.Color),
+                    })
+                end
+            end
+        end,
+        
+        Update = function(self, deltaTime)
+            for i = #self.Particles, 1, -1 do
+                local particle = self.Particles[i]
+                particle.Age = particle.Age + deltaTime
+                particle.Position = particle.Position + particle.Velocity * deltaTime
+                
+                if particle.Age >= particle.Lifetime then
+                    table.remove(self.Particles, i)
+                end
+            end
+        end,
+        
+        Clear = function(self)
+            self.Particles = {}
+        end,
+        
+        GetParticleCount = function(self)
+            return #self.Particles
+        end,
+    }
+end
+
+-- ============================================================================
+-- UUID & ID GENERATION
+-- ============================================================================
+
+function CompatLayer:GenerateUUID()
+    local template = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+    return string.gsub(template, '[xy]', function(c)
+        local v = (c == 'x') and math.random(0, 0xf) or math.random(8, 0xb)
+        return string.format('%x', v)
+    end)
+end
+
+function CompatLayer:GenerateShortId(length)
+    length = length or 8
+    local chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+    local result = ""
+    for _ = 1, length do
+        local idx = math.random(1, #chars)
+        result = result .. string.sub(chars, idx, idx)
+    end
+    return result
+end
+
+-- ============================================================================
+-- SERIALIZATION & JSON PERSISTENCE
+-- ============================================================================
+
+function CompatLayer:Serialize(object)
+    if type(object) == "table" then
+        local result = {}
+        for k, v in pairs(object) do
+            if type(k) == "string" then
+                result[k] = CompatLayer:Serialize(v)
+            end
+        end
+        return result
+    else
+        return object
+    end
+end
+
+function CompatLayer:Deserialize(data)
+    if type(data) == "table" then
+        local result = {}
+        for k, v in pairs(data) do
+            result[k] = CompatLayer:Deserialize(v)
+        end
+        return result
+    else
+        return data
+    end
+end
+
+-- ============================================================================
+-- PROFILING & PERFORMANCE MONITORING
+-- ============================================================================
+
+local ProfileData = {}
+
+function CompatLayer:StartProfile(name)
+    if not ProfileData[name] then
+        ProfileData[name] = {
+            startTime = tick(),
+            samples = {},
+            callCount = 0,
+        }
+    end
+end
+
+function CompatLayer:EndProfile(name)
+    if ProfileData[name] then
+        local elapsed = tick() - ProfileData[name].startTime
+        table.insert(ProfileData[name].samples, elapsed)
+        ProfileData[name].callCount = ProfileData[name].callCount + 1
+        return elapsed
+    end
+end
+
+function CompatLayer:GetProfileStats(name)
+    if not ProfileData[name] then return nil end
+    
+    local data = ProfileData[name]
+    local total = 0
+    local min = math.huge
+    local max = 0
+    
+    for _, sample in pairs(data.samples) do
+        total = total + sample
+        if sample < min then min = sample end
+        if sample > max then max = sample end
+    end
+    
+    return {
+        Total = total,
+        Average = total / #data.samples,
+        Min = min,
+        Max = max,
+        CallCount = data.callCount,
+        SampleCount = #data.samples,
+    }
+end
+
+-- ============================================================================
+-- KEYFRAME ANIMATION SYSTEM
+-- ============================================================================
+
+function CompatLayer:CreateKeyframeSequence(name)
+    return {
+        Name = name,
+        Keyframes = {},
+        Duration = 0,
+        
+        AddKeyframe = function(self, time, value)
+            table.insert(self.Keyframes, {Time = time, Value = value})
+            self.Duration = math.max(self.Duration, time)
+        end,
+        
+        SampleAt = function(self, time)
+            local clamped = CompatLayer:Clamp(time, 0, self.Duration)
+            
+            for i = 1, #self.Keyframes - 1 do
+                local kf1 = self.Keyframes[i]
+                local kf2 = self.Keyframes[i + 1]
+                
+                if clamped >= kf1.Time and clamped <= kf2.Time then
+                    local t = (clamped - kf1.Time) / (kf2.Time - kf1.Time)
+                    return CompatLayer:Lerp(kf1.Value, kf2.Value, t)
+                end
+            end
+            
+            return self.Keyframes[#self.Keyframes].Value
+        end,
+    }
+end
+
+-- ============================================================================
+-- MEMORY POOL FOR OBJECTS
+-- ============================================================================
+
+function CompatLayer:CreateMemoryPool(constructor, resetFunc, size)
+    size = size or 100
+    local pool = {
+        Available = {},
+        InUse = {},
+        Constructor = constructor,
+        ResetFunc = resetFunc,
+    }
+    
+    for _ = 1, size do
+        table.insert(pool.Available, constructor())
+    end
+    
+    function pool:Allocate()
+        local obj
+        if #self.Available > 0 then
+            obj = table.remove(self.Available)
+        else
+            obj = self.Constructor()
+        end
+        table.insert(self.InUse, obj)
+        return obj
+    end
+    
+    function pool:Release(obj)
+        for i, o in pairs(self.InUse) do
+            if o == obj then
+                table.remove(self.InUse, i)
+                break
+            end
+        end
+        if self.ResetFunc then
+            self.ResetFunc(obj)
+        end
+        table.insert(self.Available, obj)
+    end
+    
+    function pool:GetStats()
+        return {
+            Available = #self.Available,
+            InUse = #self.InUse,
+            Total = #self.Available + #self.InUse,
+        }
+    end
+    
+    return pool
+end
+
+-- ============================================================================
+-- GLOBAL SHORTCUTS & COMPATIBILITY
+-- ============================================================================
+
+-- Initialize core functionality
+CompatLayer._initialized = true
+CompatLayer._startTime = tick()
+
+function CompatLayer:IsInitialized()
+    return self._initialized
+end
+
+function CompatLayer:GetUptime()
+    return tick() - self._startTime
+end
+
+-- Documentation & Info
+function CompatLayer:GetVersion()
+    return "1.0 - Free Edition"
+end
+
+function CompatLayer:GetInfo()
+    return {
+        Version = CompatLayer:GetVersion(),
+        Services = 25,
+        Datatypes = 20,
+        Functions = 700,
+        OOPSystems = {
+            "Class System with Inheritance",
+            "Entity-Component-System (ECS)",
+            "Behavior Trees",
+            "State Machines",
+            "Plugin System",
+        },
+        Components = {
+            "Transform", "Rigidbody", "Collider", "Animator",
+            "Sprite", "Audio", "Particle System"
+        },
+        Features = "Complete Roblox API, OOP Classes, ECS, Behavior Trees, Particle Systems, Memory Pools, Profiling, Decorators, Task Queues, UUID Generation, Serialization"
+    }
+end
+
+print([[
+╔═══════════════════════════════════════════════════════════════════╗
+║  PolyLayer - Roblox to Polytoria QOL Addition - v1.0 Free Edition ║
+║  Complete OOP + Enterprise Features                               ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+✓ 25+ Services             ✓ 700+ Functions        ✓ Full OOP
+✓ Class System             ✓ Entity-Component-Sys  ✓ Behavior Trees
+✓ Event Bus                ✓ Object Pooling        ✓ Plugin System
+✓ Particle Systems         ✓ Memory Pools          ✓ Profiling
+✓ State Machine            ✓ Task Queues           ✓ Decorators
+✓ Keyframe Animation       ✓ UUID Generation       ✓ Quaternions
+✓ Global Variables         ✓ Advanced Logging      ✓ Bitwise Ops
+
+OOP EXAMPLES:
+  local MyClass = Compat:Class('Player')
+  local instance = MyClass:new()
+
+ECS EXAMPLES:
+  local entity = Compat:CreateEntity()
+  entity:AddComponent('transform', Compat:CreateTransformComponent())
+
+PLUGIN EXAMPLES:
+  Compat:RegisterPlugin('MyPlugin', {Init = function() print('Loaded!') end})
+
+Access via: Compat:Method() or direct shortcuts like Spawn(), Delay()
+]])
+
+-- ============================================================================
+-- SCENE MANAGEMENT SYSTEM
+-- ============================================================================
+
+local SceneManager = {
+    scenes = {},
+    currentScene = nil,
+}
+
+function CompatLayer:LoadScene(sceneName)
+    if SceneManager.currentScene and SceneManager.scenes[SceneManager.currentScene] then
+        if SceneManager.scenes[SceneManager.currentScene].OnUnload then
+            SceneManager.scenes[SceneManager.currentScene]:OnUnload()
+        end
+    end
+    
+    SceneManager.currentScene = sceneName
+    if SceneManager.scenes[sceneName] and SceneManager.scenes[sceneName].OnLoad then
+        SceneManager.scenes[sceneName]:OnLoad()
+    end
+end
+
+function CompatLayer:RegisterScene(name, sceneObject)
+    SceneManager.scenes[name] = sceneObject
+end
+
+function CompatLayer:GetCurrentScene()
+    return SceneManager.currentScene
+end
+
+-- ============================================================================
+-- PREFAB/TEMPLATE SYSTEM
+-- ============================================================================
+
+local PrefabRegistry = {}
+
+function CompatLayer:CreatePrefab(name, template)
+    PrefabRegistry[name] = template
+end
+
+function CompatLayer:InstantiatePrefab(prefabName, parent, properties)
+    if not PrefabRegistry[prefabName] then
+        error("Prefab '" .. prefabName .. "' not found")
+    end
+    
+    local template = PrefabRegistry[prefabName]
+    local instance = CompatLayer:TableClone(template, true)
+    
+    if properties then
+        for k, v in pairs(properties) do
+            instance[k] = v
+        end
+    end
+    
+    if parent then
+        instance.Parent = parent
+    end
+    
+    return instance
+end
+
+-- ============================================================================
+-- INVENTORY SYSTEM
+-- ============================================================================
+
+function CompatLayer:CreateInventory(maxSlots)
+    maxSlots = maxSlots or 20
+    
+    return {
+        Items = {},
+        MaxSlots = maxSlots,
+        ItemCount = 0,
+        
+        AddItem = function(self, itemId, quantity, data)
+            quantity = quantity or 1
+            if self.ItemCount + quantity <= self.MaxSlots then
+                if not self.Items[itemId] then
+                    self.Items[itemId] = {ID = itemId, Quantity = 0, Data = data or {}}
+                end
+                self.Items[itemId].Quantity = self.Items[itemId].Quantity + quantity
+                self.ItemCount = self.ItemCount + quantity
+                return true
+            end
+            return false
+        end,
+        
+        RemoveItem = function(self, itemId, quantity)
+            quantity = quantity or 1
+            if self.Items[itemId] and self.Items[itemId].Quantity >= quantity then
+                self.Items[itemId].Quantity = self.Items[itemId].Quantity - quantity
+                self.ItemCount = self.ItemCount - quantity
+                if self.Items[itemId].Quantity == 0 then
+                    self.Items[itemId] = nil
+                end
+                return true
+            end
+            return false
+        end,
+        
+        GetItemCount = function(self, itemId)
+            return self.Items[itemId] and self.Items[itemId].Quantity or 0
+        end,
+        
+        HasItem = function(self, itemId, quantity)
+            return self:GetItemCount(itemId) >= (quantity or 1)
+        end,
+        
+        IsFull = function(self)
+            return self.ItemCount >= self.MaxSlots
+        end,
+    }
+end
+
+-- ============================================================================
+-- QUEST/ACHIEVEMENT SYSTEM
+-- ============================================================================
+
+function CompatLayer:CreateQuest(questId, title, description)
+    return {
+        ID = questId,
+        Title = title,
+        Description = description,
+        Status = "Inactive",
+        Progress = 0,
+        MaxProgress = 100,
+        Objectives = {},
+        Reward = {Experience = 0, Gold = 0},
+        
+        Start = function(self)
+            self.Status = "Active"
+        end,
+        
+        Complete = function(self)
+            self.Status = "Completed"
+        end,
+    }
+end
+
+function CompatLayer:CreateAchievement(id, name, description, reward)
+    return {
+        ID = id,
+        Name = name,
+        Description = description,
+        Unlocked = false,
+        Progress = 0,
+        MaxProgress = 100,
+        Reward = reward or 0,
+        
+        Unlock = function(self)
+            self.Unlocked = true
+        end,
+    }
+end
+
+-- ============================================================================
+-- SAVE/LOAD SYSTEM
+-- ============================================================================
+
+function CompatLayer:CreateSaveFile(filename)
+    return {
+        Filename = filename,
+        Data = {},
+        Timestamp = tick(),
+        Version = 1,
+        
+        Set = function(self, key, value)
+            self.Data[key] = value
+        end,
+        
+        Get = function(self, key)
+            return self.Data[key]
+        end,
+        
+        Clear = function(self)
+            self.Data = {}
+        end,
+    }
+end
+
+-- ============================================================================
+-- WEATHER & DAY/NIGHT SYSTEM
+-- ============================================================================
+
+function CompatLayer:CreateWeatherSystem()
+    return {
+        WeatherType = "Clear",
+        Intensity = 0,
+        Temperature = 20,
+        Wind = Vector3.new(0, 0, 0),
+    }
+end
+
+function CompatLayer:CreateDayNightCycle(dayLength)
+    dayLength = dayLength or 1200
+    return {
+        DayLength = dayLength,
+        CurrentTime = 0,
+        TimeOfDay = "Day",
+    }
+end
+
+-- ============================================================================
+-- FINAL SETUP & BOOT
+-- ============================================================================
+
+if not _G then _G = {} end
+_G.GenerateUUID = function() return CompatLayer:GenerateUUID() end
+_G.GenerateId = function(...) return CompatLayer:GenerateShortId(...) end
+
+function CompatLayer:InstallGlobals(opts)
+    opts = opts or {}
+    local exportList = opts.exportList
+    if not exportList then
+        exportList = {
+            "Spawn", "Delay", "Defer", "Async",
+            "GenerateUUID", "GenerateId",
+            "TableClone", "TableMerge", "TableFilter", "TableMap",
+            "Memoize", "CreateObjectPool", "PoolGet", "PoolReturn",
+            "CreateTaskQueue", "EnqueueTask", "DequeueTask",
+            "CreatePrefab", "InstantiatePrefab",
+            "CreateInventory", "CreateQuest", "CreateAchievement",
+            "CreateSaveFile", "CreateWeatherSystem", "CreateDayNightCycle",
+            "PublishAsModule", "InstallGlobals", "MakeGlobalForAllScripts",
+        }
+    end
+
+    if not _G then _G = {} end
+    _G.Compat = CompatLayer
+
+    for _, name in ipairs(exportList) do
+        if _G[name] == nil or opts.force then
+            local member = CompatLayer[name]
+            if type(member) == "function" then
+                _G[name] = function(...)
+                    return member(CompatLayer, ...)
+                end
+            else
+                _G[name] = member
+            end
+        end
+    end
+
+    if CompatLayer.EventBus then
+        _G.EventBus = CompatLayer.EventBus
+    end
+
+    if CompatLayer.Signal then
+        _G.Signal = CompatLayer.Signal
+        if type(CompatLayer.Signal.new) == "function" then
+            _G.NewSignal = function(...) return CompatLayer.Signal.new(...) end
+        end
+    end
+
+    _G.Compat = CompatLayer
+
+    return true
+end
+
+function CompatLayer:PublishAsModule(moduleName, parentServiceName)
+    moduleName = moduleName or "CompatLayer"
+    parentServiceName = parentServiceName or "ReplicatedStorage"
+
+    local ok, service = pcall(function() return game:GetService(parentServiceName) end)
+    if not ok or not service then
+        return nil, "Service not available: " .. tostring(parentServiceName)
+    end
+
+    local source = "return _G.Compat"
+    local existing = service:FindFirstChild(moduleName)
+    if existing and existing:IsA("ModuleScript") then
+        existing.Source = source
+        return existing
+    end
+
+    local ms = Instance.new("ModuleScript")
+    ms.Name = moduleName
+    ms.Source = source
+    ms.Parent = service
+    return ms
+end
+
+function CompatLayer:MakeGlobalForAllScripts(opts)
+    opts = opts or {}
+    local ok = CompatLayer:InstallGlobals(opts)
+    local module, err = CompatLayer:PublishAsModule(opts.moduleName, opts.parent)
+    return module or (err and nil), ok, err
+end
+
+
+-- ============================================================================
+-- USAGE EXAMPLES & TEST HELPERS
+-- ============================================================================
+
+function CompatLayer:CreateRequireTestScript(moduleName, parentServiceName, scriptName)
+    moduleName = moduleName or "CompatLayer"
+    parentServiceName = parentServiceName or "ReplicatedStorage"
+    scriptName = scriptName or "Compat_Require_Test"
+
+    local ok, parent = pcall(function() return game:GetService(parentServiceName) end)
+    if not ok or not parent then
+        return nil, "Parent service not available: " .. tostring(parentServiceName)
+    end
+
+    local ms = parent:FindFirstChild(moduleName)
+    if not ms or not ms:IsA("ModuleScript") then
+        return nil, "ModuleScript not found: " .. tostring(moduleName)
+    end
+
+    local ok2, serverService = pcall(function() return game:GetService("ServerScriptService") end)
+    if not ok2 or not serverService then
+        return nil, "ServerScriptService not available"
+    end
+
+    local s = Instance.new("Script")
+    s.Name = scriptName
+    s.Source = [[
+local ok, mod = pcall(function()
+    return require(game:GetService('ReplicatedStorage'):WaitForChild(']] .. moduleName .. [['))
+end)
+print("[Compat Test] require ok:", ok, "module type:", type(mod))
+if ok and mod and type(mod) == 'table' and mod.GetVersion then
+    pcall(function() print('[Compat Test] version:', mod:GetVersion()) end)
+end
+]]
+    s.Parent = serverService
+    return s
+end
+
+CompatLayer.AutoPublishOnLoad = true
+if CompatLayer.AutoPublishOnLoad then
+    pcall(function()
+        CompatLayer:InstallGlobals({force = false})
+        CompatLayer:PublishAsModule("CompatLayer", "ReplicatedStorage")
+    end)
+end
+
+return CompatLayer
