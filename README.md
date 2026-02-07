@@ -67,7 +67,7 @@ local Compat = require(game:GetService("ReplicatedStorage"):WaitForChild("Compat
 
 1. Create a **server bootstrap script** and add this code:
    ```lua
-   local CompatLayer = require(script.Parent:FindFirstChild("ScriptInstance_C6U4B7QLCBTY0T8M"))
+   local CompatLayer = require(script.Parent:FindFirstChild("CompatLayer"))
    -- Auto-publish is enabled by default; module will install globals and publish to ReplicatedStorage
    ```
 PolyLayer should be named "CompatLayer" In-game, or else, adverse, unexpected errors may occur.
@@ -86,7 +86,7 @@ PolyLayer should be named "CompatLayer" In-game, or else, adverse, unexpected er
 If you want fine-grained control over what gets published:
 
 ```lua
-local CompatLayer = require(script.Parent:FindFirstChild("ScriptInstance_C6U4B7QLCBTY0T8M"))
+local CompatLayer = require(script.Parent:FindFirstChild("CompatLayer"))
 
 -- Disable auto-publish
 CompatLayer.AutoPublishOnLoad = false
