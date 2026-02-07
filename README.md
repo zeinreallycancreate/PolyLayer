@@ -55,6 +55,8 @@ sig:Fire("Hello, Polytoria!")
 
 #### **Option A: Direct Require (Simplest)**
 
+PolyLayer should be named "CompatLayer" In-game, or else, adverse, unexpected errors may occur.
+
 Place the module in a location accessible by your scripts (e.g., `ReplicatedStorage`, `ServerScriptService`, or as a local file in your script folder):
 
 ```lua
@@ -68,6 +70,7 @@ local Compat = require(game:GetService("ReplicatedStorage"):WaitForChild("Compat
    local CompatLayer = require(script.Parent:FindFirstChild("ScriptInstance_C6U4B7QLCBTY0T8M"))
    -- Auto-publish is enabled by default; module will install globals and publish to ReplicatedStorage
    ```
+PolyLayer should be named "CompatLayer" In-game, or else, adverse, unexpected errors may occur.
 
 2. The module will:
    - Call `InstallGlobals()` → adds shortcuts to `_G` (e.g., `_G.Spawn`, `_G.Compat`, `_G.Signal`)
@@ -597,7 +600,7 @@ Compat:Error("Error message")
 ### Integrating with Existing Projects
 
 #### **Step 1: Add CompatLayer to your game**
-
+PolyLayer should be named "CompatLayer" In-game, or else, adverse, unexpected errors may occur.
 Copy `ScriptInstance_C6U4B7QLCBTY0T8M.lua` to your game's `ReplicatedStorage` or keep it locally in your script folder.
 
 #### **Step 2: Set up a bootstrap**
@@ -1384,8 +1387,8 @@ StringSplit(str, delim), StringFormat(fmt, ...), StringTrim(str)
 
 1. **Backup your module** if you make customizations
 2. **Version control** your scripts (git recommended)
-3. **Test thoroughly** when updating CompatLayer
-4. **Document custom extensions** for team consistency
+3. **Test thoroughly** when updating/modifying CompatLayer on your own
+4. **Document custom extensions** for team consistency, and error pinpointing.
 
 ### Contributing Improvements
 
